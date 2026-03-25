@@ -1,0 +1,79 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuthStore } from '@/lib/stores/authStore'
+import { Sidebar } from '@/components/Sidebar'
+import { Topbar } from '@/components/Topbar'
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  const { isAuthenticated, user, client } = useAuthStore()
+  const router = useRouter()
+  const [isChecking, setIsChecking] = useState(true)
+
+  useEffect(() => {
+    // Pequeno delay para permitir que o estado seja atualizado após o selectClient
+    const timer = setTimeout(() => {
+      if (!isAuthenticated) {
+        router.push('/')
+        setIsChecking(false)
+        return
+      }
+
+      const currentClient = useAuthStore.getState().client
+
+      // Se for owner, só permite acessar se tiver um cliente selecionado
+      if (user?.role === 'owner') {
+        if (!currentClient) {
+          router.push('/admin/clients')
+          setIsChecking(false)
+          return
+        }
+      }
+
+      // Se não for owner e não tiver cliente, redireciona para login
+      if (user?.role !== 'owner' && !currentClient) {
+        router.push('/')
+        setIsChecking(false)
+        return
+      }
+
+      setIsChecking(false)
+    }, 50)
+
+    return () => clearTimeout(timer)
+  }, [isAuthenticated, user, client, router])
+
+  if (isChecking || !isAuthenticated) {
+    return null
+  }
+
+  const currentClient = useAuthStore.getState().client
+
+  // Se for owner sem cliente selecionado, não renderiza
+  if (user?.role === 'owner' && !currentClient) {
+    return null
+  }
+
+  // Se não for owner e não tiver cliente, não renderiza
+  if (user?.role !== 'owner' && !currentClient) {
+    return null
+  }
+
+  return (
+    <div className="flex h-screen overflow-hidden">
+      <Sidebar />
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <Topbar />
+        <main className="flex-1 overflow-y-auto bg-background p-6">
+          {children}
+        </main>
+      </div>
+    </div>
+  )
+}
+

@@ -1,0 +1,156 @@
+'use client'
+
+import { useState } from 'react'
+import { useLeadsStore } from '@/lib/stores/leadsStore'
+import { ChannelBadge } from '@/components/ChannelBadge'
+import { Badge } from '@/components/ui/Badge'
+import { Input } from '@/components/ui/Input'
+import { Card, CardContent } from '@/components/ui/Card'
+import { formatRelativeTime } from '@/lib/utils'
+import { Search, Filter } from 'lucide-react'
+
+export default function LeadsPage() {
+  const { leads, setSelectedLead } = useLeadsStore()
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedChannel, setSelectedChannel] = useState<string | null>(null)
+  const [selectedTag, setSelectedTag] = useState<string | null>(null)
+
+  const allTags = Array.from(new Set(leads.flatMap((lead) => lead.tags)))
+
+  const filteredLeads = leads.filter((lead) => {
+    const matchesSearch =
+      lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      lead.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      lead.phone?.includes(searchQuery)
+    const matchesChannel = !selectedChannel || lead.channel === selectedChannel
+    const matchesTag = !selectedTag || lead.tags.includes(selectedTag)
+    return matchesSearch && matchesChannel && matchesTag
+  })
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold">Leads</h1>
+        <p className="text-muted-foreground">
+          Gerencie todos os seus leads em um só lugar
+        </p>
+      </div>
+
+      {/* Filtros */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-wrap gap-4">
+            <div className="flex-1 min-w-[200px]">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por nome, email ou telefone..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <select
+                value={selectedChannel || ''}
+                onChange={(e) => setSelectedChannel(e.target.value || null)}
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">Todos os canais</option>
+                <option value="whatsapp">WhatsApp</option>
+              </select>
+              <select
+                value={selectedTag || ''}
+                onChange={(e) => setSelectedTag(e.target.value || null)}
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">Todas as tags</option>
+                {allTags.map((tag) => (
+                  <option key={tag} value={tag}>
+                    {tag}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Lista de Leads */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {filteredLeads.map((lead) => (
+          <Card
+            key={lead.id}
+            className="cursor-pointer hover:shadow-md transition-shadow"
+            onClick={() => setSelectedLead(lead.id)}
+          >
+            <CardContent className="p-4">
+              <div className="space-y-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <h3 className="font-semibold">{lead.name}</h3>
+                    <div className="flex items-center gap-2 mt-1">
+                      <ChannelBadge channel={lead.channel} />
+                    </div>
+                  </div>
+                  <Badge
+                    variant={
+                      lead.priority === 'high'
+                        ? 'danger'
+                        : lead.priority === 'medium'
+                        ? 'warning'
+                        : 'default'
+                    }
+                  >
+                    {lead.priority === 'high' ? 'Alta' : lead.priority === 'medium' ? 'Média' : 'Baixa'}
+                  </Badge>
+                </div>
+
+                {lead.email && (
+                  <p className="text-sm text-muted-foreground">{lead.email}</p>
+                )}
+
+                <div className="flex flex-wrap gap-1">
+                  {lead.tags.map((tag) => (
+                    <Badge key={tag} variant="default" className="text-xs">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between text-sm">
+                  <Badge variant="info">{lead.pipelineStage}</Badge>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Score:</span>
+                    <Badge
+                      variant={lead.score > 70 ? 'success' : lead.score > 40 ? 'warning' : 'default'}
+                      className="text-xs"
+                    >
+                      {lead.score}
+                    </Badge>
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {formatRelativeTime(lead.updatedAt)}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {filteredLeads.length === 0 && (
+        <Card>
+          <CardContent className="p-12 text-center">
+            <p className="text-muted-foreground">Nenhum lead encontrado com os filtros aplicados</p>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+}
+
