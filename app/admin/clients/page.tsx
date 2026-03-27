@@ -11,6 +11,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Building2, Users, TrendingUp, Eye, Plus, Edit2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { Client } from '@/types'
+import { defaultTenantConfig } from '@/config/tenant'
 
 export default function AdminClientsPage() {
   const { selectClient } = useAuthStore()
@@ -85,7 +86,7 @@ export default function AdminClientsPage() {
         <div>
           <h1 className="text-3xl font-bold">Clientes</h1>
           <p className="text-muted-foreground">
-            Gerencie todos os clientes da BRENO
+            Gerencie todos os clientes da {defaultTenantConfig.branding.companyName}
           </p>
         </div>
         <Button onClick={() => handleOpenModal()}>

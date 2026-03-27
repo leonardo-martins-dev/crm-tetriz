@@ -19,7 +19,7 @@ const connectionConfig = {
 }
 
 export default function ConnectionsPage() {
-  const { connections, toggleConnection, getConnectionByType } = useConnectionsStore()
+  const { connections, toggleConnection, getConnectionByType, updateConnection } = useConnectionsStore()
 
   const handleConnect = (type: ConnectionType) => {
     // Simula o processo de conexão
@@ -36,7 +36,7 @@ export default function ConnectionsPage() {
     const connection = getConnectionByType(type)
     if (connection) {
       // Simula sincronização
-      useConnectionsStore.getState().updateConnection(type, {
+      updateConnection(type, {
         lastSync: new Date().toISOString(),
       })
     }

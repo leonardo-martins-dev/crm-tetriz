@@ -3,6 +3,7 @@
 import { useClientsStore } from '@/lib/stores/clientsStore'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Building2, Users, TrendingUp, DollarSign, Activity } from 'lucide-react'
+import { defaultTenantConfig } from '@/config/tenant'
 
 export default function AdminMetricsPage() {
   const { clients } = useClientsStore()
@@ -54,7 +55,7 @@ export default function AdminMetricsPage() {
       <div>
         <h1 className="text-3xl font-bold">Métricas Gerais</h1>
         <p className="text-muted-foreground">
-          Visão geral de todos os clientes da BRENO
+          Visão geral de todos os clientes da {defaultTenantConfig.branding.companyName}
         </p>
       </div>
 

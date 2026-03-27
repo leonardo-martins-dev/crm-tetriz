@@ -24,11 +24,9 @@ export default function DashboardLayout({
         return
       }
 
-      const currentClient = useAuthStore.getState().client
-
       // Se for owner, só permite acessar se tiver um cliente selecionado
       if (user?.role === 'owner') {
-        if (!currentClient) {
+        if (!client) {
           router.push('/admin/clients')
           setIsChecking(false)
           return
@@ -36,7 +34,7 @@ export default function DashboardLayout({
       }
 
       // Se não for owner e não tiver cliente, redireciona para login
-      if (user?.role !== 'owner' && !currentClient) {
+      if (user?.role !== 'owner' && !client) {
         router.push('/')
         setIsChecking(false)
         return
@@ -52,15 +50,13 @@ export default function DashboardLayout({
     return null
   }
 
-  const currentClient = useAuthStore.getState().client
-
   // Se for owner sem cliente selecionado, não renderiza
-  if (user?.role === 'owner' && !currentClient) {
+  if (user?.role === 'owner' && !client) {
     return null
   }
 
   // Se não for owner e não tiver cliente, não renderiza
-  if (user?.role !== 'owner' && !currentClient) {
+  if (user?.role !== 'owner' && !client) {
     return null
   }
 

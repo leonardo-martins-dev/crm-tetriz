@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useLeadsStore } from '@/lib/stores/leadsStore'
 import { usePipelineStore } from '@/lib/stores/pipelineStore'
 import { useAuthStore } from '@/lib/stores/authStore'
@@ -12,10 +12,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { formatRelativeTime } from '@/lib/utils'
 import { User, Settings, Plus, Trash2, GripVertical, ChevronDown } from 'lucide-react'
-import { PIPELINE_COLOR_PALETTE } from '@/src/domain/pipeline/constants'
-import { PipelineService } from '@/src/application/pipeline/PipelineService'
-import { ZustandPipelineRepository } from '@/src/infrastructure/repositories/zustand/ZustandPipelineRepository'
-import { ZustandLeadRepository } from '@/src/infrastructure/repositories/zustand/ZustandLeadRepository'
+import { renamePipelineStageForLeads } from '@/application/use-cases/pipeline/renamePipelineStage'
 
 export default function PipelinePage() {
   const { client } = useAuthStore()
@@ -28,21 +25,6 @@ export default function PipelinePage() {
     updatePipelineForClient,
     reorderStages
   } = usePipelineStore()
-
-  const pipelineService = useMemo(
-    () =>
-      new PipelineService(
-        new ZustandPipelineRepository({
-          getPipelineForClient,
-          updateStage,
-          addStage,
-          deleteStage,
-          reorderStages,
-        }),
-        new ZustandLeadRepository(updateLead)
-      ),
-    [getPipelineForClient, updateStage, addStage, deleteStage, reorderStages, updateLead]
-  )
   
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null)
   const [draggedOverStageId, setDraggedOverStageId] = useState<string | null>(null)
@@ -56,7 +38,7 @@ export default function PipelinePage() {
   const [newStageColor, setNewStageColor] = useState('#3b82f6')
 
   const clientId = client?.id || 'default'
-  const pipelineStages = pipelineService.getStages(clientId).sort((a, b) => a.order - b.order)
+  const pipelineStages = getPipelineForClient(clientId).sort((a, b) => a.order - b.order)
 
   const [isDragging, setIsDragging] = useState(false)
 
@@ -144,8 +126,8 @@ export default function PipelinePage() {
 
   const handleAddStage = () => {
     if (!newStageName.trim()) return
-
-    pipelineService.addStage(clientId, {
+    
+    addStage(clientId, {
       name: newStageName.trim(),
       color: newStageColor,
       leadIds: [],
@@ -157,8 +139,27 @@ export default function PipelinePage() {
 
   const handleUpdateStage = () => {
     if (!editingStage) return
-    pipelineService.updateStage(clientId, editingStage.id, editingStage.name, editingStage.color, leads)
-    
+
+    const stageBeforeUpdate = pipelineStages.find((stage) => stage.id === editingStage.id)
+    const previousStageName = stageBeforeUpdate?.name
+
+    updateStage(clientId, editingStage.id, {
+      name: editingStage.name,
+      color: editingStage.color,
+    })
+
+    if (previousStageName) {
+      const renameUpdates = renamePipelineStageForLeads({
+        leads,
+        previousStageName,
+        nextStageName: editingStage.name,
+      })
+
+      renameUpdates.forEach(({ leadId, updates }) => {
+        updateLead(leadId, updates)
+      })
+    }
+
     setEditingStage(null)
     setShowColorPicker(null)
     // Limpar refs
@@ -168,9 +169,21 @@ export default function PipelinePage() {
   const handleDeleteStage = (stageId: string) => {
     const stage = pipelineStages.find((s) => s.id === stageId)
     if (!stage) return
-
-    const fallbackStageName = pipelineStages[0]?.name ?? null
-    pipelineService.deleteStage(clientId, stageId, leads, fallbackStageName)
+    
+    // Move os leads dessa etapa para a primeira etapa
+    const firstStage = pipelineStages[0]
+    if (firstStage) {
+      leads.forEach((lead) => {
+        if (lead.pipelineStage === stage.name) {
+          updateLead(lead.id, {
+            pipelineStage: firstStage.name,
+            updatedAt: new Date().toISOString(),
+          })
+        }
+      })
+    }
+    
+    deleteStage(clientId, stageId)
   }
 
   const handleStageDragStart = (stageId: string) => (e: React.DragEvent) => {
@@ -220,7 +233,7 @@ export default function PipelinePage() {
     newOrder.splice(draggedIndex, 1)
     newOrder.splice(targetIndex, 0, draggedStageId)
 
-    pipelineService.reorderStages(clientId, newOrder)
+    reorderStages(clientId, newOrder)
     setDraggedStageId(null)
     setDragOverStageId(null)
   }
@@ -248,7 +261,24 @@ export default function PipelinePage() {
     }
   }, [showColorPicker])
 
-  const colors = PIPELINE_COLOR_PALETTE
+  const colors = [
+    { value: '#3b82f6', name: 'Azul' },
+    { value: '#8b5cf6', name: 'Roxo' },
+    { value: '#f59e0b', name: 'Laranja' },
+    { value: '#10b981', name: 'Verde' },
+    { value: '#22c55e', name: 'Verde Claro' },
+    { value: '#ef4444', name: 'Vermelho' },
+    { value: '#ec4899', name: 'Rosa' },
+    { value: '#06b6d4', name: 'Ciano' },
+    { value: '#84cc16', name: 'Lima' },
+    { value: '#f97316', name: 'Laranja Escuro' },
+    { value: '#6366f1', name: 'Índigo' },
+    { value: '#14b8a6', name: 'Turquesa' },
+    { value: '#a855f7', name: 'Roxo Claro' },
+    { value: '#0ea5e9', name: 'Azul Claro' },
+    { value: '#64748b', name: 'Cinza' },
+    { value: '#fbbf24', name: 'Amarelo' },
+  ]
 
   return (
     <div className="space-y-6">

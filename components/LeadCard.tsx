@@ -8,6 +8,7 @@ import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 import { formatDate } from '@/lib/utils'
+import { DEFAULT_LEAD_TAGS } from '@/domain/constants/tags'
 import {
   User,
   Phone,
@@ -24,7 +25,7 @@ interface LeadCardProps {
 
 export function LeadCard({ leadId }: LeadCardProps) {
   const { selectedLead, addNote, addTag, removeTag } = useLeadsStore()
-  const mockTagOptions = ['Quente', 'Interessado', 'Follow-up', 'Novo', 'VIP', 'Recuperar']
+  const mockTagOptions = [...DEFAULT_LEAD_TAGS]
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [isTagSelectOpen, setIsTagSelectOpen] = useState(false)
   const [newNote, setNewNote] = useState('')

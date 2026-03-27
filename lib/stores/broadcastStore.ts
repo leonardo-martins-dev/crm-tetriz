@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import { Broadcast, Channel, LeadStatus } from '@/types'
-import { broadcastSchema } from '@/src/contracts/v1/broadcast'
+import { Broadcast } from '@/types'
+import { broadcastSchema } from '@/contracts/v1/schemas'
 
 interface BroadcastState {
   broadcasts: Broadcast[]
@@ -11,7 +11,7 @@ interface BroadcastState {
 }
 
 export const useBroadcastStore = create<BroadcastState>((set, get) => ({
-  broadcasts: [
+  broadcasts: ([
     {
       id: 'broadcast-1',
       name: 'Promoção Black Friday',
@@ -37,16 +37,20 @@ export const useBroadcastStore = create<BroadcastState>((set, get) => ({
       scheduledAt: new Date(Date.now() + 86400000).toISOString(),
       createdAt: new Date(Date.now() - 86400000).toISOString(),
     },
-  ].map((broadcast) => broadcastSchema.parse(broadcast)),
+  ] satisfies Broadcast[]).filter((broadcast) => broadcastSchema.safeParse(broadcast).success),
 
   addBroadcast: (broadcastData) => {
-    const newBroadcast = broadcastSchema.parse({
+    const newBroadcast: Broadcast = {
       ...broadcastData,
       id: `broadcast-${Date.now()}`,
       createdAt: new Date().toISOString(),
       sentCount: 0,
       failedCount: 0,
-    }) as Broadcast
+    }
+
+    if (!broadcastSchema.safeParse(newBroadcast).success) {
+      return
+    }
 
     set((state) => ({
       broadcasts: [...state.broadcasts, newBroadcast],
@@ -56,7 +60,12 @@ export const useBroadcastStore = create<BroadcastState>((set, get) => ({
   updateBroadcast: (broadcastId: string, updates: Partial<Broadcast>) => {
     set((state) => ({
       broadcasts: state.broadcasts.map((broadcast) =>
-        broadcast.id === broadcastId ? (broadcastSchema.parse({ ...broadcast, ...updates }) as Broadcast) : broadcast
+        broadcast.id === broadcastId
+          ? (() => {
+              const nextBroadcast = { ...broadcast, ...updates }
+              return broadcastSchema.safeParse(nextBroadcast).success ? nextBroadcast : broadcast
+            })()
+          : broadcast
       ),
     }))
   },

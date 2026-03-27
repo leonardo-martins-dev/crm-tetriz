@@ -11,6 +11,7 @@ export interface User {
   role: UserRole
   avatar?: string
   clientId?: string
+  tenantId?: string
   active: boolean
 }
 
@@ -26,6 +27,7 @@ export interface Client {
 
 export interface Lead {
   id: string
+  tenantId?: string
   name: string
   channel: Channel
   phone?: string
@@ -58,6 +60,7 @@ export interface Note {
 
 export interface Message {
   id: string
+  tenantId?: string
   leadId: string
   content: string
   senderId: string
@@ -69,6 +72,7 @@ export interface Message {
 }
 
 export interface Conversation {
+  tenantId?: string
   leadId: string
   lead: Lead
   lastMessage?: Message
@@ -77,6 +81,7 @@ export interface Conversation {
 
 export interface PipelineStage {
   id: string
+  tenantId?: string
   name: string
   order: number
   color: string
@@ -85,6 +90,7 @@ export interface PipelineStage {
 
 export interface Automation {
   id: string
+  tenantId?: string
   name: string
   event: string
   condition?: string
@@ -102,6 +108,7 @@ export interface Metric {
 
 export interface Broadcast {
   id: string
+  tenantId?: string
   name: string
   message: string
   channel?: Channel

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { JsonObject } from '@/domain/types/json'
 
 export type NodeType = 'trigger' | 'action' | 'condition' | 'delay' | 'webhook'
 
@@ -7,7 +8,7 @@ export interface Node {
   type: NodeType
   label: string
   position: { x: number; y: number }
-  data: Record<string, any>
+  data: JsonObject
   connections: string[] // IDs dos nós conectados
 }
 

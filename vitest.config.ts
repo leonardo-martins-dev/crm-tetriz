@@ -1,18 +1,19 @@
 import { defineConfig } from 'vitest/config'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-
-const rootDir = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
   test: {
-    environment: 'node',
-    globals: true,
-    include: ['src/**/*.test.ts'],
+    environment: 'jsdom',
+    setupFiles: ['./vitest.setup.ts'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html'],
+      include: ['application/**/*.ts', 'lib/stores/**/*.ts'],
+    },
   },
   resolve: {
     alias: {
-      '@': path.resolve(rootDir, '.'),
+      '@': path.resolve(__dirname, '.'),
     },
   },
 })

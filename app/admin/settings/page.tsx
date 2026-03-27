@@ -4,18 +4,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useAuthStore } from '@/lib/stores/authStore'
-import { getBrandingForClient } from '@/lib/config/tenantBranding'
+import { defaultTenantConfig } from '@/config/tenant'
 
 export default function AdminSettingsPage() {
-  const { user, client } = useAuthStore()
-  const branding = getBrandingForClient(client)
+  const { user } = useAuthStore()
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Configurações</h1>
         <p className="text-muted-foreground">
-          Configurações gerais da {branding.companyName}
+          Configurações gerais da {defaultTenantConfig.branding.companyName}
         </p>
       </div>
 
@@ -40,13 +39,13 @@ export default function AdminSettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Empresa {branding.companyName}</CardTitle>
+            <CardTitle>Empresa {defaultTenantConfig.branding.companyName}</CardTitle>
             <CardDescription>Informações da agência</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Nome da Empresa</label>
-              <Input defaultValue={branding.companyName} />
+              <Input defaultValue={defaultTenantConfig.branding.companyName} />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">CNPJ</label>

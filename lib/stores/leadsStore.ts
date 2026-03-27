@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { Lead, Note, PipelineStage } from '@/types'
 import { subDays, addHours } from 'date-fns'
-import { leadSchema } from '@/src/contracts/v1'
+import { createDefaultPipeline } from '@/domain/constants/pipeline'
 
 // Mock leads data
 const generateMockLeads = (): Lead[] => {
@@ -37,7 +37,7 @@ const generateMockLeads = (): Lead[] => {
                     status === 'won' ? 'Ganhou' : 'Perdido',
       assignedTo: index % 2 === 0 ? 'user-1' : 'user-2',
       tags: isClientStage && index % 5 === 0
-        ? ['cliente', 'Quente']
+        ? ['Cliente', 'Quente']
         : index % 3 === 0
         ? ['Quente']
         : index % 3 === 1
@@ -66,7 +66,7 @@ const generateMockLeads = (): Lead[] => {
       status: 'contacted',
       pipelineStage: 'Em Atendimento',
       assignedTo: 'user-1',
-      tags: ['cliente', 'VIP'],
+      tags: ['Cliente', 'VIP'],
       score: 86,
       product: 'Plano Premium',
       priority: 'high',
@@ -86,7 +86,7 @@ const generateMockLeads = (): Lead[] => {
       status: 'qualified',
       pipelineStage: 'Qualificado',
       assignedTo: 'user-2',
-      tags: ['cliente', 'Follow-up'],
+      tags: ['Cliente', 'Follow-up'],
       score: 74,
       campaign: 'Campanha Verão 2024',
       priority: 'medium',
@@ -106,7 +106,7 @@ const generateMockLeads = (): Lead[] => {
       status: 'contacted',
       pipelineStage: 'Em Atendimento',
       assignedTo: 'user-1',
-      tags: ['cliente', 'Quente'],
+      tags: ['Cliente', 'Quente'],
       score: 68,
       priority: 'medium',
       notes: [],
@@ -118,17 +118,10 @@ const generateMockLeads = (): Lead[] => {
     },
   ]
 
-  return [...baseLeads, ...mockClients].map((lead) => leadSchema.parse(lead))
+  return [...baseLeads, ...mockClients]
 }
 
-const mockPipelineStages: PipelineStage[] = [
-  { id: 'stage-1', name: 'Novo Lead', order: 0, color: '#3b82f6', leadIds: [] },
-  { id: 'stage-2', name: 'Em Atendimento', order: 1, color: '#8b5cf6', leadIds: [] },
-  { id: 'stage-3', name: 'Qualificado', order: 2, color: '#f59e0b', leadIds: [] },
-  { id: 'stage-4', name: 'Proposta Enviada', order: 3, color: '#10b981', leadIds: [] },
-  { id: 'stage-5', name: 'Ganhou', order: 4, color: '#22c55e', leadIds: [] },
-  { id: 'stage-6', name: 'Perdido', order: 5, color: '#ef4444', leadIds: [] },
-]
+const mockPipelineStages: PipelineStage[] = createDefaultPipeline()
 
 interface LeadsState {
   leads: Lead[]
@@ -169,10 +162,8 @@ export const useLeadsStore = create<LeadsState>((set, get) => {
         leads: state.leads.map((lead) =>
           lead.id === leadId ? { ...lead, ...updates } : lead
         ),
-        selectedLead: state.selectedLeadId === leadId
-          ? state.selectedLead
-            ? { ...state.selectedLead, ...updates }
-            : state.selectedLead
+        selectedLead: state.selectedLead && state.selectedLeadId === leadId
+          ? { ...state.selectedLead, ...updates }
           : state.selectedLead,
       }))
     },
@@ -184,10 +175,8 @@ export const useLeadsStore = create<LeadsState>((set, get) => {
             ? { ...lead, notes: [...lead.notes, note] }
             : lead
         ),
-        selectedLead: state.selectedLeadId === leadId
-          ? state.selectedLead
-            ? { ...state.selectedLead, notes: [...state.selectedLead.notes, note] }
-            : state.selectedLead
+        selectedLead: state.selectedLead && state.selectedLeadId === leadId
+          ? { ...state.selectedLead, notes: [...state.selectedLead.notes, note] }
           : state.selectedLead,
       }))
     },
@@ -218,10 +207,8 @@ export const useLeadsStore = create<LeadsState>((set, get) => {
         return {
           leads: updatedLeads,
           pipelineStages: finalStages,
-          selectedLead: state.selectedLeadId === leadId
-            ? state.selectedLead
-              ? { ...state.selectedLead, pipelineStage: stage.name }
-              : state.selectedLead
+          selectedLead: state.selectedLead && state.selectedLeadId === leadId
+            ? { ...state.selectedLead, pipelineStage: stage.name }
             : state.selectedLead,
         }
       })
@@ -234,10 +221,8 @@ export const useLeadsStore = create<LeadsState>((set, get) => {
             ? { ...lead, tags: [...lead.tags, tag] }
             : lead
         ),
-        selectedLead: state.selectedLeadId === leadId
-          ? state.selectedLead
-            ? { ...state.selectedLead, tags: [...state.selectedLead.tags, tag] }
-            : state.selectedLead
+        selectedLead: state.selectedLead && state.selectedLeadId === leadId
+          ? { ...state.selectedLead, tags: [...state.selectedLead.tags, tag] }
           : state.selectedLead,
       }))
     },
@@ -249,10 +234,8 @@ export const useLeadsStore = create<LeadsState>((set, get) => {
             ? { ...lead, tags: lead.tags.filter((t) => t !== tag) }
             : lead
         ),
-        selectedLead: state.selectedLeadId === leadId
-          ? state.selectedLead
-            ? { ...state.selectedLead, tags: state.selectedLead.tags.filter((t) => t !== tag) }
-            : state.selectedLead
+        selectedLead: state.selectedLead && state.selectedLeadId === leadId
+          ? { ...state.selectedLead, tags: state.selectedLead.tags.filter((t) => t !== tag) }
           : state.selectedLead,
       }))
     },

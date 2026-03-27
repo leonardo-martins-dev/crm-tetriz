@@ -1,13 +1,14 @@
 import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
 import './globals.css'
 import { ThemeProvider } from '@/lib/contexts/ThemeContext'
-import { getDefaultBranding } from '@/lib/config/tenantBranding'
+import { defaultTenantConfig } from '@/config/tenant'
 
-const branding = getDefaultBranding()
+const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: `${branding.appName} - Omnichannel`,
-  description: `CRM Omnichannel da ${branding.companyName}`,
+  title: `${defaultTenantConfig.branding.fullProductName} - Omnichannel`,
+  description: defaultTenantConfig.branding.appDescription,
 }
 
 export default function RootLayout({
@@ -17,7 +18,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
-      <body className="font-sans">
+      <body className={inter.className}>
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

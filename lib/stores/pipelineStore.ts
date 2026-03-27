@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { PipelineStage } from '@/types'
-import { DEFAULT_PIPELINE_STAGE_NAMES, PIPELINE_COLOR_PALETTE } from '@/src/domain/pipeline/constants'
+import { createDefaultPipeline } from '@/domain/constants/pipeline'
 
 interface PipelineState {
   pipelines: Record<string, PipelineStage[]> // clientId -> stages
@@ -12,16 +12,8 @@ interface PipelineState {
   reorderStages: (clientId: string, stageIds: string[]) => void
 }
 
-// Pipeline padrão
-const getDefaultPipeline = (): PipelineStage[] => [
-  ...DEFAULT_PIPELINE_STAGE_NAMES.map((name, order) => ({
-    id: `stage-${order + 1}`,
-    name,
-    order,
-    color: PIPELINE_COLOR_PALETTE[order]?.value ?? PIPELINE_COLOR_PALETTE[0].value,
-    leadIds: [],
-  })),
-]
+const createStageId = () =>
+  `stage-${new Date().getTime()}-${Math.random().toString(36).slice(2, 8)}`
 
 export const usePipelineStore = create<PipelineState>((set, get) => ({
   pipelines: {},
@@ -32,7 +24,7 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
       return pipelines[clientId]
     }
     // Retorna pipeline padrão se não existir
-    const defaultPipeline = getDefaultPipeline()
+    const defaultPipeline = createDefaultPipeline()
     set((state) => ({
       pipelines: {
         ...state.pipelines,
@@ -55,7 +47,7 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
     const currentPipeline = get().getPipelineForClient(clientId)
     const newOrder = currentPipeline.length
     const newStage: PipelineStage = {
-      id: `stage-${Date.now()}`,
+      id: createStageId(),
       order: newOrder,
       ...stageData,
     }

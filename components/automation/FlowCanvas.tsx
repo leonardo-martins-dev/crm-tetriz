@@ -10,6 +10,7 @@ export function FlowCanvas() {
   const canvasRef = useRef<HTMLDivElement>(null)
   const {
     currentFlow,
+    flows,
     selectedNodeId,
     addNode,
     updateNode,
@@ -17,6 +18,7 @@ export function FlowCanvas() {
     connectNodes,
     disconnectNodes,
     setSelectedNode,
+    setCurrentFlow,
     updateFlow,
   } = useAutomationFlowStore()
 
@@ -31,10 +33,10 @@ export function FlowCanvas() {
   const addNodeButtonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
-    if (!currentFlow) {
-      useAutomationFlowStore.getState().setCurrentFlow(useAutomationFlowStore.getState().flows[0]?.id || '')
+    if (!currentFlow && flows[0]?.id) {
+      setCurrentFlow(flows[0].id)
     }
-  }, [currentFlow])
+  }, [currentFlow, flows, setCurrentFlow])
 
   const handleCanvasClick = (e: React.MouseEvent) => {
     if (e.target === canvasRef.current || (e.target as HTMLElement).classList.contains('grid-background')) {

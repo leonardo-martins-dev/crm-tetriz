@@ -10,6 +10,7 @@ import { useClientsStore } from '@/lib/stores/clientsStore'
 import { useUsersStore } from '@/lib/stores/usersStore'
 import { User as UserIcon, Plus, Search, Building2, Edit2, Power, PowerOff } from 'lucide-react'
 import { User, UserRole } from '@/types'
+import { defaultTenantConfig } from '@/config/tenant'
 
 export default function AdminUsersPage() {
   const { clients } = useClientsStore()
@@ -31,7 +32,7 @@ export default function AdminUsersPage() {
   )
 
   const getClientName = (clientId?: string) => {
-    if (!clientId) return 'BRENO'
+    if (!clientId) return defaultTenantConfig.branding.companyName
     return clients.find((c) => c.id === clientId)?.name || 'N/A'
   }
 
