@@ -15,6 +15,8 @@ import {
   Tag,
 } from 'lucide-react'
 import { useAuthStore } from '@/lib/stores/authStore'
+import { getBrandingForClient } from '@/lib/config/tenantBranding'
+import { getFeatureFlagsForClient } from '@/lib/config/featureFlags'
 
 const dashboardNav = [
   { name: 'Inbox', href: '/dashboard/inbox', icon: Inbox },
@@ -36,17 +38,25 @@ const adminNav = [
 
 export function Sidebar() {
   const pathname = usePathname()
-  const { user } = useAuthStore()
+  const { user, client } = useAuthStore()
   const isAdmin = pathname.startsWith('/admin')
   const navItems = isAdmin ? adminNav : dashboardNav
+  const branding = getBrandingForClient(client)
+  const flags = getFeatureFlagsForClient(client)
+  const visibleNavItems = navItems.filter((item) => {
+    if (item.href.includes('/metrics')) {
+      return flags.advancedMetrics
+    }
+    return true
+  })
 
   return (
     <div className="flex h-screen w-64 flex-col border-r bg-card">
       <div className="flex h-16 items-center border-b px-6">
-        <h1 className="text-xl font-bold text-primary">BRENO CRM</h1>
+        <h1 className="text-xl font-bold text-primary">{branding.appName}</h1>
       </div>
       <nav className="flex-1 space-y-1 p-4">
-        {navItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const Icon = item.icon
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
           return (

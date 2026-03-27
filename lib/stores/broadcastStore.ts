@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { Broadcast, Channel, LeadStatus } from '@/types'
+import { broadcastSchema } from '@/src/contracts/v1/broadcast'
 
 interface BroadcastState {
   broadcasts: Broadcast[]
@@ -17,7 +18,7 @@ export const useBroadcastStore = create<BroadcastState>((set, get) => ({
       message: 'Olá! Temos uma promoção especial de Black Friday para você! 🎉',
       channel: 'whatsapp',
       tags: ['Interessado', 'Quente'],
-      status: 'sent',
+      broadcastStatus: 'sent',
       totalRecipients: 20,
       sentCount: 18,
       failedCount: 2,
@@ -36,16 +37,16 @@ export const useBroadcastStore = create<BroadcastState>((set, get) => ({
       scheduledAt: new Date(Date.now() + 86400000).toISOString(),
       createdAt: new Date(Date.now() - 86400000).toISOString(),
     },
-  ],
+  ].map((broadcast) => broadcastSchema.parse(broadcast)),
 
   addBroadcast: (broadcastData) => {
-    const newBroadcast: Broadcast = {
+    const newBroadcast = broadcastSchema.parse({
       ...broadcastData,
       id: `broadcast-${Date.now()}`,
       createdAt: new Date().toISOString(),
       sentCount: 0,
       failedCount: 0,
-    }
+    }) as Broadcast
 
     set((state) => ({
       broadcasts: [...state.broadcasts, newBroadcast],
@@ -55,7 +56,7 @@ export const useBroadcastStore = create<BroadcastState>((set, get) => ({
   updateBroadcast: (broadcastId: string, updates: Partial<Broadcast>) => {
     set((state) => ({
       broadcasts: state.broadcasts.map((broadcast) =>
-        broadcast.id === broadcastId ? { ...broadcast, ...updates } : broadcast
+        broadcast.id === broadcastId ? (broadcastSchema.parse({ ...broadcast, ...updates }) as Broadcast) : broadcast
       ),
     }))
   },

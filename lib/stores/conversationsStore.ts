@@ -1,9 +1,9 @@
 import { create } from 'zustand'
-import { Message, Conversation, Lead } from '@/types'
+import { Message, Conversation, Lead, Channel } from '@/types'
 import { subHours, subMinutes } from 'date-fns'
 
 // Mock messages
-const generateMockMessages = (leadId: string, channel: string): Message[] => {
+const generateMockMessages = (leadId: string, channel: Channel): Message[] => {
   const messages: Message[] = [
     {
       id: `msg-${leadId}-1`,
@@ -12,7 +12,7 @@ const generateMockMessages = (leadId: string, channel: string): Message[] => {
       senderId: leadId,
       senderName: 'Lead',
       senderType: 'lead',
-      channel: channel as any,
+      channel,
       createdAt: subHours(new Date(), 2).toISOString(),
       read: true,
     },
@@ -23,7 +23,7 @@ const generateMockMessages = (leadId: string, channel: string): Message[] => {
       senderId: 'user-1',
       senderName: 'Atendente',
       senderType: 'user',
-      channel: channel as any,
+      channel,
       createdAt: subHours(new Date(), 1).toISOString(),
       read: true,
     },
@@ -34,7 +34,7 @@ const generateMockMessages = (leadId: string, channel: string): Message[] => {
       senderId: leadId,
       senderName: 'Lead',
       senderType: 'lead',
-      channel: channel as any,
+      channel,
       createdAt: subMinutes(new Date(), 30).toISOString(),
       read: true,
     },

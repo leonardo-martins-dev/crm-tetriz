@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { PipelineStage } from '@/types'
+import { DEFAULT_PIPELINE_STAGE_NAMES, PIPELINE_COLOR_PALETTE } from '@/src/domain/pipeline/constants'
 
 interface PipelineState {
   pipelines: Record<string, PipelineStage[]> // clientId -> stages
@@ -11,24 +12,15 @@ interface PipelineState {
   reorderStages: (clientId: string, stageIds: string[]) => void
 }
 
-// Cores padrão para as etapas
-const defaultColors = [
-  '#3b82f6', // azul
-  '#8b5cf6', // roxo
-  '#f59e0b', // laranja
-  '#10b981', // verde
-  '#22c55e', // verde claro
-  '#ef4444', // vermelho
-]
-
 // Pipeline padrão
 const getDefaultPipeline = (): PipelineStage[] => [
-  { id: 'stage-1', name: 'Novo Lead', order: 0, color: defaultColors[0], leadIds: [] },
-  { id: 'stage-2', name: 'Em Atendimento', order: 1, color: defaultColors[1], leadIds: [] },
-  { id: 'stage-3', name: 'Qualificado', order: 2, color: defaultColors[2], leadIds: [] },
-  { id: 'stage-4', name: 'Proposta Enviada', order: 3, color: defaultColors[3], leadIds: [] },
-  { id: 'stage-5', name: 'Ganhou', order: 4, color: defaultColors[4], leadIds: [] },
-  { id: 'stage-6', name: 'Perdido', order: 5, color: defaultColors[5], leadIds: [] },
+  ...DEFAULT_PIPELINE_STAGE_NAMES.map((name, order) => ({
+    id: `stage-${order + 1}`,
+    name,
+    order,
+    color: PIPELINE_COLOR_PALETTE[order]?.value ?? PIPELINE_COLOR_PALETTE[0].value,
+    leadIds: [],
+  })),
 ]
 
 export const usePipelineStore = create<PipelineState>((set, get) => ({

@@ -7,6 +7,7 @@ import { useClientsStore } from '@/lib/stores/clientsStore'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
+import { getDefaultBranding } from '@/lib/config/tenantBranding'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -15,15 +16,15 @@ export default function LoginPage() {
   const { login } = useAuthStore()
   const { clients } = useClientsStore()
   const router = useRouter()
+  const branding = getDefaultBranding()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     
-    const success = await login(email, password, clients)
-    if (success) {
-      const user = useAuthStore.getState().user
-      if (user?.role === 'owner') {
+    const user = await login(email, password, clients)
+    if (user) {
+      if (user.role === 'owner') {
         router.push('/admin/clients')
       } else {
         router.push('/dashboard/inbox')
@@ -37,9 +38,9 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/10 via-background to-primary/5 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-3xl font-bold text-center">BRENO CRM</CardTitle>
+          <CardTitle className="text-3xl font-bold text-center">{branding.appName}</CardTitle>
           <CardDescription className="text-center">
-            Faça login para acessar o sistema
+            {branding.loginSubtitle}
           </CardDescription>
         </CardHeader>
         <CardContent>

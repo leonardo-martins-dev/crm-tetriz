@@ -5,7 +5,7 @@ interface AuthState {
   user: User | null
   client: Client | null
   isAuthenticated: boolean
-  login: (email: string, password: string, clients?: Client[]) => Promise<boolean>
+  login: (email: string, password: string, clients?: Client[]) => Promise<User | null>
   logout: () => void
   selectClient: (clientId: string, clients: Client[]) => void
   setUser: (user: User) => void
@@ -57,9 +57,9 @@ export const useAuthStore = create<AuthState>((set) => ({
         }
       }
       
-      return true
+      return user
     }
-    return false
+    return null
   },
 
   logout: () => {

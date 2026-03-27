@@ -31,14 +31,6 @@ export function LeadCard({ leadId }: LeadCardProps) {
   const [showNoteInput, setShowNoteInput] = useState(false)
   const tagSelectRef = useRef<HTMLDivElement>(null)
 
-  if (!selectedLead || selectedLead.id !== leadId) {
-    return (
-      <div className="p-4 text-center text-muted-foreground">
-        Carregando informações do lead...
-      </div>
-    )
-  }
-
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (tagSelectRef.current && !tagSelectRef.current.contains(event.target as Node)) {
@@ -49,6 +41,14 @@ export function LeadCard({ leadId }: LeadCardProps) {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  if (!selectedLead || selectedLead.id !== leadId) {
+    return (
+      <div className="p-4 text-center text-muted-foreground">
+        Carregando informações do lead...
+      </div>
+    )
+  }
 
   const handleToggleSelectedTag = (tag: string) => {
     setSelectedTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]))

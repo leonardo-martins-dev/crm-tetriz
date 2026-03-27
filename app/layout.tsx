@@ -1,13 +1,13 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
 import './globals.css'
 import { ThemeProvider } from '@/lib/contexts/ThemeContext'
+import { getDefaultBranding } from '@/lib/config/tenantBranding'
 
-const inter = Inter({ subsets: ['latin'] })
+const branding = getDefaultBranding()
 
 export const metadata: Metadata = {
-  title: 'BRENO CRM - Omnichannel',
-  description: 'CRM Omnichannel da Agência BRENO',
+  title: `${branding.appName} - Omnichannel`,
+  description: `CRM Omnichannel da ${branding.companyName}`,
 }
 
 export default function RootLayout({
@@ -17,7 +17,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className="font-sans">
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

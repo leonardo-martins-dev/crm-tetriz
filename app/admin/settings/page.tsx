@@ -4,16 +4,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useAuthStore } from '@/lib/stores/authStore'
+import { getBrandingForClient } from '@/lib/config/tenantBranding'
 
 export default function AdminSettingsPage() {
-  const { user } = useAuthStore()
+  const { user, client } = useAuthStore()
+  const branding = getBrandingForClient(client)
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Configurações</h1>
         <p className="text-muted-foreground">
-          Configurações gerais da BRENO
+          Configurações gerais da {branding.companyName}
         </p>
       </div>
 
@@ -38,13 +40,13 @@ export default function AdminSettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Empresa BRENO</CardTitle>
+            <CardTitle>Empresa {branding.companyName}</CardTitle>
             <CardDescription>Informações da agência</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Nome da Empresa</label>
-              <Input defaultValue="BRENO" />
+              <Input defaultValue={branding.companyName} />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">CNPJ</label>
