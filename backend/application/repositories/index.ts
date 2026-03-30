@@ -1,0 +1,7 @@
+export type { TenantRepository } from './tenant.repository'
+export type { ProfileRepository } from './profile.repository'
+export type { LeadRepository, LeadFilters } from './lead.repository'
+export type { ConversationRepository } from './conversation.repository'
+export type { MessageRepository } from './message.repository'
+export type { ConnectionRepository } from './connection.repository'
+export type { AgentRepository } from './agent.repository'
