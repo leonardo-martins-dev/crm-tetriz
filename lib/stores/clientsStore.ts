@@ -1,5 +1,14 @@
 import { create } from 'zustand'
-import { Client } from '@/types'
+import { Client, ClientPlan } from '@/types'
+
+export const AVAILABLE_MODULES = [
+  { id: 'inbox', label: 'Inbox' },
+  { id: 'pipeline', label: 'Pipeline' },
+  { id: 'agents', label: 'Agentes IA' },
+  { id: 'automations', label: 'Automações' },
+  { id: 'broadcast', label: 'Broadcast' },
+  { id: 'metrics', label: 'Métricas' },
+] as const
 
 interface ClientsState {
   clients: Client[]
@@ -15,6 +24,9 @@ const initialClients: Client[] = [
     id: 'client-1',
     name: 'Tech Solutions',
     active: true,
+    plan: 'enterprise',
+    modules: ['inbox', 'pipeline', 'agents', 'automations', 'broadcast', 'metrics'],
+    maxUsers: 15,
     createdAt: '2024-01-15',
     userCount: 5,
     leadCount: 127,
@@ -23,6 +35,9 @@ const initialClients: Client[] = [
     id: 'client-2',
     name: 'Digital Agency',
     active: true,
+    plan: 'professional',
+    modules: ['inbox', 'pipeline', 'automations', 'metrics'],
+    maxUsers: 8,
     createdAt: '2024-02-20',
     userCount: 3,
     leadCount: 89,
@@ -31,6 +46,9 @@ const initialClients: Client[] = [
     id: 'client-3',
     name: 'E-commerce Plus',
     active: true,
+    plan: 'basic',
+    modules: ['inbox', 'pipeline', 'metrics'],
+    maxUsers: 3,
     createdAt: '2024-03-10',
     userCount: 8,
     leadCount: 203,

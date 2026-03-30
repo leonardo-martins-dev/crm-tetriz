@@ -250,30 +250,28 @@ export default function AdminUsersPage() {
             >
               <option value="user">Usuário</option>
               <option value="client">Cliente</option>
-              <option value="owner">Dono</option>
             </select>
           </div>
 
-          {formData.role !== 'owner' && (
-            <div className="space-y-2">
-              <label htmlFor="clientId" className="text-sm font-medium">
-                Cliente
-              </label>
-              <select
-                id="clientId"
-                value={formData.clientId}
-                onChange={(e) => setFormData({ ...formData, clientId: e.target.value })}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              >
-                <option value="">Selecione um cliente</option>
-                {clients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          <div className="space-y-2">
+            <label htmlFor="clientId" className="text-sm font-medium">
+              Cliente *
+            </label>
+            <select
+              id="clientId"
+              value={formData.clientId}
+              onChange={(e) => setFormData({ ...formData, clientId: e.target.value })}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              required
+            >
+              <option value="">Selecione um cliente</option>
+              {clients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <div className="flex items-center gap-2">
             <input

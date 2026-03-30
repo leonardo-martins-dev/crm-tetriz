@@ -2,12 +2,33 @@
 
 import { useLeadsStore } from '@/lib/stores/leadsStore'
 import { useConversationsStore } from '@/lib/stores/conversationsStore'
+import { useUsersStore } from '@/lib/stores/usersStore'
+import { useAgentsStore } from '@/lib/stores/agentsStore'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
-import { TrendingUp, TrendingDown, MessageSquare, Clock, Users, Target, Lock } from 'lucide-react'
+import { TrendingUp, TrendingDown, MessageSquare, Clock, Users, Target, Lock, Tags, UserCircle } from 'lucide-react'
+import { 
+  BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, 
+  PieChart, Pie, Cell,
+  Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis
+} from 'recharts'
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-card/90 border border-border/50 shadow-lg p-3 rounded-lg backdrop-blur-md">
+        <p className="font-medium text-sm mb-1">{label || payload[0].name}</p>
+        <p className="text-primary font-bold">{payload[0].value} <span className="text-muted-foreground font-normal text-xs">leads</span></p>
+      </div>
+    );
+  }
+  return null;
+}
 
 export default function MetricsPage() {
   const { leads } = useLeadsStore()
   const { conversations } = useConversationsStore()
+  const { users } = useUsersStore()
+  const { agents } = useAgentsStore()
 
   const totalLeads = leads.length
   const activeConversations = conversations.filter((c) => c.lead.window24hOpen).length
@@ -28,6 +49,45 @@ export default function MetricsPage() {
     'Ganhou': leads.filter((l) => l.pipelineStage === 'Ganhou').length,
     'Perdido': leads.filter((l) => l.pipelineStage === 'Perdido').length,
   }
+
+  const windowData = [
+    { name: 'Janela Aberta', value: leadsByWindow24h.open },
+    { name: 'Janela Fechada', value: leadsByWindow24h.closed },
+  ]
+  const PIE_COLORS = ['#3b82f6', '#94a3b8']
+
+  const stageData = Object.entries(leadsByStage).map(([name, count]) => ({
+    name,
+    count
+  }))
+
+
+  const tagsCount = leads.reduce((acc, lead) => {
+    lead.tags.forEach(tag => {
+      acc[tag] = (acc[tag] || 0) + 1
+    })
+    return acc
+  }, {} as Record<string, number>)
+
+  const tagData = Object.entries(tagsCount)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5)
+
+  const assignedCounts = leads.reduce((acc, lead) => {
+    if (lead.assignedTo) {
+      acc[lead.assignedTo] = (acc[lead.assignedTo] || 0) + 1
+    }
+    return acc
+  }, {} as Record<string, number>)
+
+  const assignedData = Object.entries(assignedCounts).map(([id, count]) => {
+    const agent = agents.find(a => a.id === id)
+    if (agent) return { name: `🤖 ${agent.name}`, count }
+    const user = users.find(u => u.id === id)
+    if (user) return { name: user.name.split(' ')[0], count }
+    return { name: 'Desconhecido', count }
+  }).sort((a, b) => b.count - a.count)
 
   const metrics = [
     {
@@ -97,65 +157,121 @@ export default function MetricsPage() {
         })}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
         <Card className="transition-all hover:shadow-md border-border/50 overflow-hidden">
-          <CardHeader className="bg-muted/10 border-b border-border/50 pb-4 mb-4">
-            <CardTitle>Leads por Janela 24h</CardTitle>
+          <CardHeader className="bg-muted/10 border-b border-border/50 pb-4 mb-4 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-medium">Leads por Janela 24h</CardTitle>
+            <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {Object.entries(leadsByWindow24h).map(([key, count]) => {
-                const percentage = totalLeads > 0 ? (count / totalLeads) * 100 : 0
-
-                const isOpen = key === 'open'
-                const ItemIcon = isOpen ? Clock : Lock
-                const label = isOpen ? 'Janela aberta' : 'Janela fechada'
-
-                return (
-                  <div key={key} className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2">
-                        <ItemIcon className="h-4 w-4" />
-                        <span>{label}</span>
-                      </div>
-                      <span className="font-medium">{count} leads</span>
-                    </div>
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
-                      <div
-                        className="h-full bg-primary transition-all"
-                        style={{ width: `${percentage}%` }}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
+            <div className="h-[220px] w-full pt-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={windowData}
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="value"
+                    stroke="none"
+                  >
+                    {windowData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip content={<CustomTooltip />} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex justify-center gap-6 mt-2">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-primary" />
+                <span className="text-sm text-foreground font-medium">Aberta <span className="text-muted-foreground font-normal">({windowData[0].value})</span></span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-slate-400" />
+                <span className="text-sm text-foreground font-medium">Fechada <span className="text-muted-foreground font-normal">({windowData[1].value})</span></span>
+              </div>
             </div>
           </CardContent>
         </Card>
 
         <Card className="transition-all hover:shadow-md border-border/50 overflow-hidden">
-          <CardHeader className="bg-muted/10 border-b border-border/50 pb-4 mb-4">
-            <CardTitle>Leads por Etapa</CardTitle>
+          <CardHeader className="bg-muted/10 border-b border-border/50 pb-4 mb-4 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-medium">Comportamento do Funil</CardTitle>
+            <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {Object.entries(leadsByStage).map(([stage, count]) => {
-                const percentage = totalLeads > 0 ? (count / totalLeads) * 100 : 0
-                return (
-                  <div key={stage} className="space-y-1">
-                    <div className="flex items-center justify-between text-sm">
-                      <span>{stage}</span>
-                      <span className="font-medium">{count}</span>
-                    </div>
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
-                      <div
-                        className="h-full bg-primary transition-all"
-                        style={{ width: `${percentage}%` }}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
+            <div className="h-[240px] w-full pt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart layout="vertical" data={stageData} margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
+                  <XAxis type="number" hide />
+                  <YAxis 
+                    dataKey="name" 
+                    type="category" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    width={90}
+                    tick={{ fontSize: 10, fill: 'currentColor', opacity: 0.8 }} 
+                  />
+                  <RechartsTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
+                  <Bar dataKey="count" fill="currentColor" className="fill-primary/80 hover:fill-primary transition-colors" radius={[0, 4, 4, 0]} barSize={16}>
+                     {stageData.map((entry, index) => (
+                       <Cell key={`cell-${index}`} className="fill-primary/80 hover:fill-primary" />
+                     ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+
+        <Card className="transition-all hover:shadow-md border-border/50 overflow-hidden">
+          <CardHeader className="bg-muted/10 border-b border-border/50 pb-4 mb-4 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-medium">Distribuição por Tags</CardTitle>
+            <Tags className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="h-[240px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart cx="50%" cy="50%" outerRadius="65%" data={tagData}>
+                  <PolarGrid stroke="hsl(var(--muted-foreground)/0.2)" />
+                  <PolarAngleAxis dataKey="name" tick={{ fontSize: 10, fill: 'currentColor', opacity: 0.8 }} />
+                  <RechartsTooltip content={<CustomTooltip />} />
+                  <Radar name="Leads" dataKey="count" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.4} />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="transition-all hover:shadow-md border-border/50 overflow-hidden">
+          <CardHeader className="bg-muted/10 border-b border-border/50 pb-4 mb-4 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-medium">Atendimentos por Responsável</CardTitle>
+            <UserCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="h-[240px] w-full pt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart layout="vertical" data={assignedData} margin={{ top: 0, right: 30, left: 20, bottom: 0 }}>
+                  <XAxis type="number" hide />
+                  <YAxis 
+                    dataKey="name" 
+                    type="category" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    width={90}
+                    tick={{ fontSize: 10, fill: 'currentColor', opacity: 0.8 }} 
+                  />
+                  <RechartsTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
+                  <Bar dataKey="count" fill="currentColor" className="fill-primary/80 hover:fill-primary transition-colors" radius={[0, 4, 4, 0]} barSize={16}>
+                     {assignedData.map((entry, index) => (
+                       <Cell key={`cell-${index}`} className={entry.name.includes('🤖') ? 'fill-purple-500/80 hover:fill-purple-500' : 'fill-blue-500/80 hover:fill-blue-500'} />
+                     ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>

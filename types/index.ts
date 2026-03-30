@@ -15,11 +15,16 @@ export interface User {
   active: boolean
 }
 
+export type ClientPlan = 'basic' | 'professional' | 'enterprise'
+
 export interface Client {
   id: string
   name: string
   logo?: string
   active: boolean
+  plan: ClientPlan
+  modules: string[]
+  maxUsers: number
   createdAt: string
   userCount: number
   leadCount: number
@@ -65,7 +70,7 @@ export interface Message {
   content: string
   senderId: string
   senderName: string
-  senderType: 'user' | 'lead'
+  senderType: 'user' | 'lead' | 'ai'
   channel: Channel
   createdAt: string
   read: boolean

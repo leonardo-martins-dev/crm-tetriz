@@ -1,40 +1,49 @@
 import { create } from 'zustand'
 import { Message, Conversation, Lead, Channel } from '@/types'
 import { subHours, subMinutes } from 'date-fns'
+import { useLeadsStore } from '@/lib/stores/leadsStore'
+import { useAuthStore } from '@/lib/stores/authStore'
 
 // Mock messages
-const generateMockMessages = (leadId: string, channel: Channel): Message[] => {
+const generateMockMessages = (lead: Lead): Message[] => {
+  const isAi = lead.assignedTo?.startsWith('agent-')
+  const senderId = lead.assignedTo || '1'
+  const senderType = isAi ? 'ai' : 'user'
+  const senderName = isAi ? 'Assistente IA' : 'Atendente'
+
   const messages: Message[] = [
     {
-      id: `msg-${leadId}-1`,
-      leadId,
+      id: `msg-${lead.id}-1`,
+      leadId: lead.id,
       content: 'Olá, gostaria de saber mais sobre seus produtos.',
-      senderId: leadId,
+      senderId: lead.id,
       senderName: 'Lead',
       senderType: 'lead',
-      channel,
+      channel: lead.channel,
       createdAt: subHours(new Date(), 2).toISOString(),
       read: true,
     },
     {
-      id: `msg-${leadId}-2`,
-      leadId,
-      content: 'Claro! Fico feliz em ajudar. Qual produto te interessa?',
-      senderId: 'user-1',
-      senderName: 'Atendente',
-      senderType: 'user',
-      channel,
+      id: `msg-${lead.id}-2`,
+      leadId: lead.id,
+      content: isAi 
+        ? 'Olá! Sou um assistente especializado. Fico feliz em ajudar. Qual produto te interessa?' 
+        : 'Claro! Fico feliz em ajudar. Qual produto te interessa?',
+      senderId,
+      senderName,
+      senderType,
+      channel: lead.channel,
       createdAt: subHours(new Date(), 1).toISOString(),
       read: true,
     },
     {
-      id: `msg-${leadId}-3`,
-      leadId,
+      id: `msg-${lead.id}-3`,
+      leadId: lead.id,
       content: 'Estou interessado no plano premium.',
-      senderId: leadId,
+      senderId: lead.id,
       senderName: 'Lead',
       senderType: 'lead',
-      channel,
+      channel: lead.channel,
       createdAt: subMinutes(new Date(), 30).toISOString(),
       read: true,
     },
@@ -54,11 +63,10 @@ interface ConversationsState {
 }
 
 export const useConversationsStore = create<ConversationsState>((set, get) => {
-  // Gerar mensagens iniciais vazias - serão inicializadas quando os leads estiverem disponíveis
   const initializeConversations = (leads: Lead[]) => {
     const allMessages: Message[] = []
     leads.forEach((lead) => {
-      const leadMessages = generateMockMessages(lead.id, lead.channel)
+      const leadMessages = generateMockMessages(lead)
       allMessages.push(...leadMessages)
     })
 
@@ -96,12 +104,14 @@ export const useConversationsStore = create<ConversationsState>((set, get) => {
     },
 
     sendMessage: (leadId: string, content: string) => {
+      const currentUser = useAuthStore.getState().user || { id: '1', name: 'Você' }
+      
       const newMessage: Message = {
         id: `msg-${leadId}-${Date.now()}`,
         leadId,
         content,
-        senderId: 'user-1',
-        senderName: 'Você',
+        senderId: currentUser.id,
+        senderName: currentUser.name || 'Você',
         senderType: 'user',
         channel: get().conversations.find((c) => c.leadId === leadId)?.lead.channel || 'whatsapp',
         createdAt: new Date().toISOString(),
@@ -116,6 +126,9 @@ export const useConversationsStore = create<ConversationsState>((set, get) => {
             : conv
         ),
       }))
+
+      // "Assumir" lead
+      useLeadsStore.getState().updateLead(leadId, { assignedTo: currentUser.id })
     },
 
     getMessagesByLead: (leadId: string) => {

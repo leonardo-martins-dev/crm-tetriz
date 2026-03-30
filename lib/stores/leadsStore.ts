@@ -35,7 +35,7 @@ const generateMockLeads = (): Lead[] => {
                     status === 'qualified' ? 'Qualificado' :
                     status === 'proposal' ? 'Proposta Enviada' :
                     status === 'won' ? 'Ganhou' : 'Perdido',
-      assignedTo: index % 2 === 0 ? 'user-1' : 'user-2',
+      assignedTo: index % 3 === 0 ? '1' : index % 3 === 1 ? 'agent-1' : '3',
       tags: isClientStage && index % 5 === 0
         ? ['Cliente', 'Quente']
         : index % 3 === 0
@@ -65,7 +65,7 @@ const generateMockLeads = (): Lead[] => {
       email: 'cliente.alpha@email.com',
       status: 'contacted',
       pipelineStage: 'Em Atendimento',
-      assignedTo: 'user-1',
+      assignedTo: '1',
       tags: ['Cliente', 'VIP'],
       score: 86,
       product: 'Plano Premium',
@@ -85,7 +85,7 @@ const generateMockLeads = (): Lead[] => {
       email: 'cliente.beta@email.com',
       status: 'qualified',
       pipelineStage: 'Qualificado',
-      assignedTo: 'user-2',
+      assignedTo: 'agent-1',
       tags: ['Cliente', 'Follow-up'],
       score: 74,
       campaign: 'Campanha Verão 2024',
@@ -105,7 +105,7 @@ const generateMockLeads = (): Lead[] => {
       email: 'cliente.gama@email.com',
       status: 'contacted',
       pipelineStage: 'Em Atendimento',
-      assignedTo: 'user-1',
+      assignedTo: '3',
       tags: ['Cliente', 'Quente'],
       score: 68,
       priority: 'medium',

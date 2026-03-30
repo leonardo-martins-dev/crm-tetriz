@@ -13,6 +13,7 @@ import {
   UserCog,
   Link2,
   Tag,
+  Bot,
 } from 'lucide-react'
 import { useAuthStore } from '@/lib/stores/authStore'
 import { getTenantConfig } from '@/config/tenant'
@@ -20,11 +21,11 @@ import { FeatureKey, isFeatureEnabled } from '@/application/services/featureFlag
 
 const dashboardNav = [
   { name: 'Inbox', href: '/dashboard/inbox', icon: Inbox, feature: 'inbox' as FeatureKey },
-  { name: 'Clientes', href: '/dashboard/clients', icon: Building2 },
   { name: 'Pipeline', href: '/dashboard/pipeline', icon: GitBranch, feature: 'pipeline' as FeatureKey },
   { name: 'Leads', href: '/dashboard/leads', icon: Users },
   { name: 'Conexões', href: '/dashboard/connections', icon: Link2 },
   { name: 'Tags', href: '/dashboard/tags', icon: Tag },
+  { name: 'Agentes IA', href: '/dashboard/agents', icon: Bot },
   { name: 'Métricas', href: '/dashboard/metrics', icon: BarChart3 },
   { name: 'Usuários', href: '/dashboard/users', icon: UserCog },
   { name: 'Configurações', href: '/dashboard/settings', icon: Settings },
@@ -34,7 +35,6 @@ const adminNav = [
   { name: 'Clientes', href: '/admin/clients', icon: Building2 },
   { name: 'Usuários', href: '/admin/users', icon: UserCog },
   { name: 'Métricas', href: '/admin/metrics', icon: BarChart3 },
-  { name: 'Configurações', href: '/admin/settings', icon: Settings },
 ]
 
 export function Sidebar() {
