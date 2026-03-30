@@ -63,8 +63,8 @@ export default function MetricsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Métricas</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-3xl font-bold tracking-tight">Métricas</h1>
+        <p className="text-muted-foreground mt-1 text-sm">
           Acompanhe o desempenho do seu CRM
         </p>
       </div>
@@ -73,7 +73,7 @@ export default function MetricsPage() {
         {metrics.map((metric) => {
           const Icon = metric.icon
           return (
-            <Card key={metric.title}>
+            <Card key={metric.title} className="transition-all hover:shadow-md border-border/50">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">{metric.title}</CardTitle>
                 <Icon className="h-4 w-4 text-muted-foreground" />
@@ -98,8 +98,8 @@ export default function MetricsPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
+        <Card className="transition-all hover:shadow-md border-border/50 overflow-hidden">
+          <CardHeader className="bg-muted/10 border-b border-border/50 pb-4 mb-4">
             <CardTitle>Leads por Janela 24h</CardTitle>
           </CardHeader>
           <CardContent>
@@ -133,8 +133,8 @@ export default function MetricsPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
+        <Card className="transition-all hover:shadow-md border-border/50 overflow-hidden">
+          <CardHeader className="bg-muted/10 border-b border-border/50 pb-4 mb-4">
             <CardTitle>Leads por Etapa</CardTitle>
           </CardHeader>
           <CardContent>

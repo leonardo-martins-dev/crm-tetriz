@@ -45,8 +45,8 @@ export default function ConnectionsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Conexões</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-3xl font-bold tracking-tight">Conexões</h1>
+        <p className="text-muted-foreground mt-1 text-sm">
           Gerencie sua conexão do WhatsApp
         </p>
       </div>
@@ -60,8 +60,8 @@ export default function ConnectionsPage() {
           if (!connection) return null
 
           return (
-            <Card key={connection.id} className="relative">
-              <CardHeader>
+            <Card key={connection.id} className="relative transition-all hover:shadow-md border-border/50 overflow-hidden">
+              <CardHeader className="bg-muted/20 border-b border-border/50 pb-4">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <div
@@ -146,8 +146,8 @@ export default function ConnectionsPage() {
       </div>
 
       {/* Informações adicionais */}
-      <Card>
-        <CardHeader>
+      <Card className="border-border/50 shadow-sm overflow-hidden bg-card/60 backdrop-blur-md">
+        <CardHeader className="bg-muted/20 border-b border-border/50">
           <CardTitle>Como funciona</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-muted-foreground">

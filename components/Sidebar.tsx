@@ -26,6 +26,7 @@ const dashboardNav = [
   { name: 'Conexões', href: '/dashboard/connections', icon: Link2 },
   { name: 'Tags', href: '/dashboard/tags', icon: Tag },
   { name: 'Métricas', href: '/dashboard/metrics', icon: BarChart3 },
+  { name: 'Usuários', href: '/dashboard/users', icon: UserCog },
   { name: 'Configurações', href: '/dashboard/settings', icon: Settings },
 ]
 

@@ -41,7 +41,7 @@ export default function AutomationFlowPage() {
       </div>
 
       {/* Canvas */}
-      <div className="flex-1 rounded-lg border bg-background">
+      <div className="flex-1 rounded-lg border border-border/50 bg-card/60 backdrop-blur-md shadow-sm overflow-hidden">
         <FlowCanvas />
       </div>
     </div>

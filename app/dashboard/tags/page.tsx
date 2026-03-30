@@ -103,8 +103,8 @@ export default function TagsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Tags</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-3xl font-bold tracking-tight">Tags</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
             Gerencie as tags para organizar seus leads
           </p>
         </div>
@@ -117,7 +117,7 @@ export default function TagsPage() {
       {/* Lista de Tags */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {tags.map((tag) => (
-          <Card key={tag.id}>
+          <Card key={tag.id} className="transition-all hover:shadow-md border-border/50 overflow-hidden">
             <div className="p-6">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
@@ -164,11 +164,13 @@ export default function TagsPage() {
       </div>
 
       {tags.length === 0 && (
-        <Card>
-          <div className="p-12 text-center">
-            <TagIcon className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Nenhuma tag criada</h3>
-            <p className="text-muted-foreground mb-4">
+        <Card className="border-dashed">
+          <div className="p-12 text-center flex flex-col items-center justify-center">
+            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
+              <TagIcon className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-medium mb-1">Nenhuma tag criada</h3>
+            <p className="text-sm text-muted-foreground max-w-sm mx-auto mb-4">
               Crie tags para organizar e filtrar seus leads
             </p>
             <Button onClick={() => handleOpenModal()}>

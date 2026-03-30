@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useLeadsStore } from '@/lib/stores/leadsStore'
 import { ChannelBadge } from '@/components/ChannelBadge'
 import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Card, CardContent } from '@/components/ui/Card'
 import { formatRelativeTime } from '@/lib/utils'
@@ -30,14 +31,14 @@ export default function LeadsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Leads</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-3xl font-bold tracking-tight">Leads</h1>
+        <p className="text-muted-foreground mt-1 text-sm">
           Gerencie todos os seus leads em um só lugar
         </p>
       </div>
 
       {/* Filtros */}
-      <Card>
+      <Card className="border-none shadow-sm bg-card/60 backdrop-blur-md">
         <CardContent className="p-4">
           <div className="flex flex-wrap gap-4">
             <div className="flex-1 min-w-[200px]">
@@ -47,7 +48,7 @@ export default function LeadsPage() {
                   placeholder="Buscar por nome, email ou telefone..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 bg-background/50"
                 />
               </div>
             </div>
@@ -55,7 +56,7 @@ export default function LeadsPage() {
               <select
                 value={selectedChannel || ''}
                 onChange={(e) => setSelectedChannel(e.target.value || null)}
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                className="h-10 rounded-md border border-input bg-background/50 px-3 text-sm transition-colors focus:bg-background"
               >
                 <option value="">Todos os canais</option>
                 <option value="whatsapp">WhatsApp</option>
@@ -63,7 +64,7 @@ export default function LeadsPage() {
               <select
                 value={selectedTag || ''}
                 onChange={(e) => setSelectedTag(e.target.value || null)}
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                className="h-10 rounded-md border border-input bg-background/50 px-3 text-sm transition-colors focus:bg-background"
               >
                 <option value="">Todas as tags</option>
                 {allTags.map((tag) => (
@@ -82,7 +83,7 @@ export default function LeadsPage() {
         {filteredLeads.map((lead) => (
           <Card
             key={lead.id}
-            className="cursor-pointer hover:shadow-md transition-shadow"
+            className="cursor-pointer transition-all hover:shadow-md border-border/50"
             onClick={() => setSelectedLead(lead.id)}
           >
             <CardContent className="p-4">
@@ -144,9 +145,20 @@ export default function LeadsPage() {
       </div>
 
       {filteredLeads.length === 0 && (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <p className="text-muted-foreground">Nenhum lead encontrado com os filtros aplicados</p>
+        <Card className="border-dashed">
+          <CardContent className="p-12 text-center flex flex-col items-center justify-center">
+            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
+              <Search className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-medium mb-1">Nenhum lead encontrado</h3>
+            <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+              Nenhum resultado corresponde aos filtros aplicados.
+            </p>
+            {(searchQuery || selectedChannel || selectedTag) && (
+              <Button variant="ghost" onClick={() => { setSearchQuery(''); setSelectedChannel(null); setSelectedTag(null); }} className="mt-4 text-primary hover:bg-transparent hover:underline">
+                Limpar filtros
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}

@@ -3,7 +3,7 @@ import { CSSProperties } from 'react'
 
 interface BadgeProps {
   children: React.ReactNode
-  variant?: 'default' | 'success' | 'warning' | 'danger' | 'info'
+  variant?: 'default' | 'secondary' | 'outline' | 'success' | 'warning' | 'danger' | 'info'
   className?: string
   style?: CSSProperties
 }
@@ -11,6 +11,8 @@ interface BadgeProps {
 export function Badge({ children, variant = 'default', className, style }: BadgeProps) {
   const variants = {
     default: 'bg-secondary text-secondary-foreground',
+    secondary: 'bg-secondary text-secondary-foreground',
+    outline: 'border border-border text-foreground',
     success: 'bg-green-500/10 text-green-600 dark:text-green-400',
     warning: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
     danger: 'bg-red-500/10 text-red-600 dark:text-red-400',

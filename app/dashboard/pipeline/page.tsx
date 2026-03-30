@@ -284,8 +284,8 @@ export default function PipelinePage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Pipeline</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-3xl font-bold tracking-tight">Pipeline</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
             Arraste os leads entre as etapas do funil
           </p>
         </div>
@@ -310,7 +310,7 @@ export default function PipelinePage() {
               onDragLeave={(e) => handleDragLeave(e)}
               onDrop={(e) => handleDrop(e, stage.id)}
             >
-              <Card className={`${isDraggedOver ? 'ring-2 ring-primary' : ''}`}>
+              <Card className={`border-border/50 overflow-hidden ${isDraggedOver ? 'ring-2 ring-primary bg-muted/30' : 'bg-muted/10'}`}>
                 <div
                   className="p-4 border-b"
                   style={{ borderLeftColor: stage.color, borderLeftWidth: '4px' }}
@@ -330,8 +330,8 @@ export default function PipelinePage() {
                   {stageLeads.map((lead) => (
                     <div
                       key={lead.id}
-                      className={`rounded-lg border bg-card text-card-foreground shadow-sm p-3 hover:shadow-md transition-all select-none ${
-                        draggedLeadId === lead.id ? 'opacity-50 cursor-grabbing' : 'cursor-grab'
+                      className={`rounded-lg border border-border/50 bg-card/80 backdrop-blur-sm text-card-foreground shadow-sm p-3 hover:shadow-md hover:border-border transition-all select-none ${
+                        draggedLeadId === lead.id ? 'opacity-50 cursor-grabbing scale-95 shadow-lg' : 'cursor-grab'
                       }`}
                       draggable={true}
                       onDragStart={(e) => {
@@ -401,7 +401,7 @@ export default function PipelinePage() {
                     </div>
                   ))}
                   {stageLeads.length === 0 && (
-                    <div className="p-8 text-center text-sm text-muted-foreground border-2 border-dashed rounded-lg">
+                    <div className="p-8 text-center text-sm text-muted-foreground border-2 border-dashed border-border/50 rounded-lg">
                       {isDraggedOver ? 'Solte aqui' : 'Nenhum lead nesta etapa'}
                     </div>
                   )}

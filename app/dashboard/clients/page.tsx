@@ -35,11 +35,11 @@ export default function ClientsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Clientes</h1>
-        <p className="text-muted-foreground">Leads marcados com a tag cliente</p>
+        <h1 className="text-3xl font-bold tracking-tight">Clientes</h1>
+        <p className="text-muted-foreground mt-1 text-sm">Leads marcados com a tag cliente</p>
       </div>
 
-      <Card>
+      <Card className="border-none shadow-sm bg-card/60 backdrop-blur-md">
         <CardContent className="p-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -47,7 +47,7 @@ export default function ClientsPage() {
               placeholder="Buscar cliente por nome, email ou telefone..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
+              className="pl-10 bg-background/50"
             />
           </div>
         </CardContent>
@@ -57,7 +57,7 @@ export default function ClientsPage() {
         {filteredClients.map((client) => (
           <Card
             key={client.id}
-            className="cursor-pointer hover:shadow-md transition-shadow"
+            className="cursor-pointer transition-all hover:shadow-md border-border/50"
             onClick={() => setSelectedLead(client.id)}
           >
             <CardContent className="p-4 space-y-3">
@@ -85,9 +85,15 @@ export default function ClientsPage() {
       </div>
 
       {filteredClients.length === 0 && (
-        <Card>
-          <CardContent className="p-12 text-center text-muted-foreground">
-            Nenhum cliente encontrado
+        <Card className="border-dashed">
+          <CardContent className="p-12 text-center flex flex-col items-center justify-center">
+            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
+              <Building2 className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-medium mb-1">Nenhum cliente encontrado</h3>
+            <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+              Nenhum resultado corresponde à sua busca ou você ainda não tem clientes.
+            </p>
           </CardContent>
         </Card>
       )}
