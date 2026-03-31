@@ -1,34 +1,40 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { SupabaseLeadRepository } from './repositories/supabase-lead.repository'
 import { SupabaseMessageRepository } from './repositories/supabase-message.repository'
+import { SupabaseConnectionRepository } from './repositories/supabase-connection.repository'
+import { SupabaseConversationRepository } from './repositories/supabase-conversation.repository'
+import { SupabaseAgentRepository } from './repositories/supabase-agent.repository'
+
 import { MetaWhatsAppService } from './services/meta-whatsapp.service'
+import { EvolutionApiServiceImpl } from './services/evolution-api.service'
 import { OpenAiOrchestratorService } from './services/openai-orchestrator.service'
 
 /**
- * Container de Injeção de Dependência.
- * Factory que cria repositórios e serviços com o SupabaseClient injetado.
- *
- * Uso:
- * ```ts
- * const container = createContainer(supabaseClient)
- * const leads = await container.leadRepo.list(tenantId)
- * ```
+ * Injeção de Dependência rápida via factory.
+ * Registra as implementações concretas (Infra) nos slots das interfaces (Application).
  */
 export function createContainer(supabase: SupabaseClient) {
-  return {
-    // Repositories
-    leadRepo: new SupabaseLeadRepository(supabase),
-    messageRepo: new SupabaseMessageRepository(supabase),
-    // Adicionar os demais repositórios aqui conforme implementados:
-    // conversationRepo: new SupabaseConversationRepository(supabase),
-    // connectionRepo: new SupabaseConnectionRepository(supabase),
-    // agentRepo: new SupabaseAgentRepository(supabase),
-    // tenantRepo: new SupabaseTenantRepository(supabase),
-    // profileRepo: new SupabaseProfileRepository(supabase),
+  // Repositories
+  const leadRepo = new SupabaseLeadRepository(supabase)
+  const messageRepo = new SupabaseMessageRepository(supabase)
+  const connectionRepo = new SupabaseConnectionRepository(supabase)
+  const conversationRepo = new SupabaseConversationRepository(supabase)
+  const agentRepo = new SupabaseAgentRepository(supabase)
 
-    // Services (sem dependência de Supabase)
-    whatsappService: new MetaWhatsAppService(),
-    aiOrchestrator: new OpenAiOrchestratorService(),
+  // Services
+  const whatsappService = new MetaWhatsAppService()
+  const evolutionService = new EvolutionApiServiceImpl()
+  const aiOrchestrator = new OpenAiOrchestratorService()
+
+  return {
+    leadRepo,
+    messageRepo,
+    connectionRepo,
+    conversationRepo,
+    agentRepo,
+    whatsappService,
+    evolutionService,
+    aiOrchestrator,
   }
 }
 

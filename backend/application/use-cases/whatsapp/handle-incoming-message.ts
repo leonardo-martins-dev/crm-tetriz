@@ -3,14 +3,15 @@ import { ConversationRepository } from '../../repositories'
 import { MessageRepository } from '../../repositories'
 import { ConnectionRepository } from '../../repositories'
 import { AgentRepository } from '../../repositories'
-import { WhatsAppService } from '../../services'
+import { WhatsAppService, EvolutionApiService } from '../../services'
 import { AiOrchestratorService } from '../../services'
 import { MessageSenderType } from '../../../domain/enums'
 import { NotFoundError } from '../../../domain/errors/domain-errors'
 import { Lead } from '../../../domain/entities'
 
-interface WebhookMessagePayload {
-  phoneNumberId: string
+export interface WebhookMessagePayload {
+  phoneNumberId?: string // Usado na Meta
+  instanceName?: string  // Usado na Evolution
   from: string       // Número do remetente
   messageId: string  // wamid
   text: string
@@ -25,18 +26,12 @@ interface HandleIncomingMessageDeps {
   connectionRepo: ConnectionRepository
   agentRepo: AgentRepository
   whatsappService: WhatsAppService
+  evolutionService?: EvolutionApiService
   aiOrchestrator: AiOrchestratorService
 }
 
 /**
- * Use case: Processa uma mensagem recebida via webhook do WhatsApp.
- *
- * Responsabilidades:
- * 1. Identifica o tenant pela conexão (phone_number_id)
- * 2. Faz upsert do lead pelo telefone
- * 3. Cria/atualiza a conversa
- * 4. Salva a mensagem
- * 5. Verifica triggers de agentes IA e dispara se necessário
+ * Use case: Processa uma mensagem recebida via webhook do WhatsApp (Meta ou Evolution).
  */
 export async function handleIncomingMessage(
   payload: WebhookMessagePayload,
@@ -49,13 +44,20 @@ export async function handleIncomingMessage(
     connectionRepo,
     agentRepo,
     whatsappService,
+    evolutionService,
     aiOrchestrator,
   } = deps
 
-  // 1. Encontra a conexão pelo phone_number_id → identifica o tenant
-  const connection = await connectionRepo.findByPhoneNumberId(payload.phoneNumberId)
+  // 1. Encontra a conexão
+  let connection;
+  if (payload.instanceName) {
+    connection = await connectionRepo.findByInstanceName(payload.instanceName)
+  } else if (payload.phoneNumberId) {
+    connection = await connectionRepo.findByPhoneNumberId(payload.phoneNumberId)
+  }
+
   if (!connection) {
-    throw new NotFoundError('Connection', payload.phoneNumberId)
+    throw new NotFoundError('Connection', payload.instanceName || payload.phoneNumberId || 'unknown')
   }
 
   const tenantId = connection.tenantId
@@ -166,12 +168,28 @@ async function checkAndTriggerAgents(
   if (!activeConnection || !lead.phone) return
 
   // Envia via WhatsApp
-  const sendResult = await whatsappService.sendTextMessage({
-    phoneNumberId: activeConnection.phoneNumberId,
-    accessToken: activeConnection.accessTokenEncrypted, // Descriptografado na infra
-    recipientPhone: lead.phone,
-    message: aiResponse.content,
-  })
+  let wamid = ''
+  if (activeConnection.provider === 'evolution' && deps.evolutionService) {
+    if (!activeConnection.instanceName) return
+    const sendResult = await deps.evolutionService.sendTextMessage({
+      instanceName: activeConnection.instanceName,
+      apiKey: activeConnection.evolutionApiKey || process.env.EVOLUTION_API_KEY || 'mude-me',
+      recipientPhone: lead.phone,
+      message: aiResponse.content,
+    })
+    wamid = sendResult.key?.id || ''
+  } else {
+    // Caso seja Meta
+    if (!activeConnection.phoneNumberId || !activeConnection.accessTokenEncrypted) return
+    
+    const sendResult = await deps.whatsappService.sendTextMessage({
+      phoneNumberId: activeConnection.phoneNumberId,
+      accessToken: activeConnection.accessTokenEncrypted, // Descriptografado na infra
+      recipientPhone: lead.phone,
+      message: aiResponse.content,
+    })
+    wamid = sendResult.wamid
+  }
 
   // Salva a mensagem da IA no banco
   await messageRepo.create({
@@ -184,6 +202,7 @@ async function checkAndTriggerAgents(
     senderType: MessageSenderType.AI,
     channel: 'whatsapp',
     read: true,
-    wamid: sendResult.wamid,
+    wamid: wamid,
   })
 }
+

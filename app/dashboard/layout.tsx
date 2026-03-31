@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/stores/authStore'
+import { useConversationsStore } from '@/lib/stores/conversationsStore'
 import { Sidebar } from '@/components/Sidebar'
 import { Topbar } from '@/components/Topbar'
 
@@ -12,8 +13,16 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const { isAuthenticated, user, client } = useAuthStore()
+  const { subscribeToMessages } = useConversationsStore()
   const router = useRouter()
   const [isChecking, setIsChecking] = useState(true)
+
+  useEffect(() => {
+    if (client?.id) {
+      const unsubscribe = subscribeToMessages(client.id)
+      return () => unsubscribe()
+    }
+  }, [client?.id, subscribeToMessages])
 
   useEffect(() => {
     // Pequeno delay para permitir que o estado seja atualizado após o selectClient

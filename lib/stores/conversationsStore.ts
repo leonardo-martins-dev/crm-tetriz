@@ -1,74 +1,49 @@
 import { create } from 'zustand'
-import { Message, Conversation, Lead, Channel } from '@/types'
+import { Message, Conversation, Lead } from '@/types'
 import { subHours, subMinutes } from 'date-fns'
 import { useLeadsStore } from '@/lib/stores/leadsStore'
 import { useAuthStore } from '@/lib/stores/authStore'
+import { useConnectionsStore } from '@/lib/stores/connectionsStore'
+import { supabase } from '@/lib/supabase'
 
-// Mock messages
-const generateMockMessages = (lead: Lead): Message[] => {
-  const isAi = lead.assignedTo?.startsWith('agent-')
-  const senderId = lead.assignedTo || '1'
-  const senderType = isAi ? 'ai' : 'user'
-  const senderName = isAi ? 'Assistente IA' : 'Atendente'
-
-  const messages: Message[] = [
-    {
-      id: `msg-${lead.id}-1`,
-      leadId: lead.id,
-      content: 'Olá, gostaria de saber mais sobre seus produtos.',
-      senderId: lead.id,
-      senderName: 'Lead',
-      senderType: 'lead',
-      channel: lead.channel,
-      createdAt: subHours(new Date(), 2).toISOString(),
-      read: true,
-    },
-    {
-      id: `msg-${lead.id}-2`,
-      leadId: lead.id,
-      content: isAi 
-        ? 'Olá! Sou um assistente especializado. Fico feliz em ajudar. Qual produto te interessa?' 
-        : 'Claro! Fico feliz em ajudar. Qual produto te interessa?',
-      senderId,
-      senderName,
-      senderType,
-      channel: lead.channel,
-      createdAt: subHours(new Date(), 1).toISOString(),
-      read: true,
-    },
-    {
-      id: `msg-${lead.id}-3`,
-      leadId: lead.id,
-      content: 'Estou interessado no plano premium.',
-      senderId: lead.id,
-      senderName: 'Lead',
-      senderType: 'lead',
-      channel: lead.channel,
-      createdAt: subMinutes(new Date(), 30).toISOString(),
-      read: true,
-    },
-  ]
-  return messages
-}
+// Mapper para converter snake_case do Supabase para camelCase do TS
+const mapMessageFromDb = (row: any): Message => ({
+  id: row.id,
+  tenantId: row.tenant_id,
+  leadId: row.lead_id,
+  content: row.content,
+  senderId: row.sender_id,
+  senderName: row.sender_name,
+  senderType: row.sender_type,
+  channel: row.channel,
+  createdAt: row.created_at,
+  read: row.read,
+})
 
 interface ConversationsState {
   messages: Message[]
   conversations: Conversation[]
   selectedConversationId: string | null
-  initializeConversations: (leads: Lead[]) => void
+  initialized: boolean
+  initializeConversations: (leads: Lead[]) => Promise<void>
+  subscribeToMessages: (tenantId: string) => () => void
   setSelectedConversation: (leadId: string | null) => void
-  sendMessage: (leadId: string, content: string) => void
+  sendMessage: (leadId: string, content: string) => Promise<void>
   getMessagesByLead: (leadId: string) => Message[]
   getConversationByLead: (leadId: string) => Conversation | null
 }
 
 export const useConversationsStore = create<ConversationsState>((set, get) => {
-  const initializeConversations = (leads: Lead[]) => {
-    const allMessages: Message[] = []
-    leads.forEach((lead) => {
-      const leadMessages = generateMockMessages(lead)
-      allMessages.push(...leadMessages)
-    })
+  const initializeConversations = async (leads: Lead[]) => {
+    if (get().initialized) return
+    
+    // Buscar mensagens reais do Supabase
+    const { data: dbMessages, error } = await supabase
+      .from('messages')
+      .select('*')
+      .order('created_at', { ascending: true })
+
+    const allMessages = (dbMessages || []).map(mapMessageFromDb)
 
     const conversations: Conversation[] = leads.map((lead) => {
       const leadMessages = allMessages.filter((m) => m.leadId === lead.id)
@@ -90,21 +65,72 @@ export const useConversationsStore = create<ConversationsState>((set, get) => {
         const bTime = b.lastMessage?.createdAt || b.lead.updatedAt
         return new Date(bTime).getTime() - new Date(aTime).getTime()
       }),
+      initialized: true
     })
+  }
+
+  const subscribeToMessages = (tenantId: string) => {
+    const channel = supabase
+      .channel('realtime_inbox')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `tenant_id=eq.${tenantId}`
+        },
+        (payload) => {
+          const newMessage = mapMessageFromDb(payload.new)
+          
+          set((state) => {
+            // Evitar duplicados (caso o sendMessage ja tenha adicionado localmente)
+            if (state.messages.find(m => m.id === newMessage.id)) return state
+
+            const updatedMessages = [...state.messages, newMessage]
+            const updatedConversations = state.conversations.map((conv) =>
+              conv.leadId === newMessage.leadId
+                ? { 
+                    ...conv, 
+                    lastMessage: newMessage, 
+                    unreadCount: newMessage.senderType === 'lead' ? conv.unreadCount + 1 : conv.unreadCount 
+                  }
+                : conv
+            )
+
+            return {
+              messages: updatedMessages,
+              conversations: updatedConversations.sort((a, b) => {
+                const aTime = a.lastMessage?.createdAt || a.lead.updatedAt
+                const bTime = b.lastMessage?.createdAt || b.lead.updatedAt
+                return new Date(bTime).getTime() - new Date(aTime).getTime()
+              })
+            }
+          })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }
 
   return {
     messages: [],
     conversations: [],
     selectedConversationId: null,
+    initialized: false,
     initializeConversations,
+    subscribeToMessages,
 
     setSelectedConversation: (leadId: string | null) => {
       set({ selectedConversationId: leadId })
     },
 
-    sendMessage: (leadId: string, content: string) => {
+    sendMessage: async (leadId: string, content: string) => {
       const currentUser = useAuthStore.getState().user || { id: '1', name: 'Você' }
+      const lead = get().conversations.find((c) => c.leadId === leadId)?.lead
       
       const newMessage: Message = {
         id: `msg-${leadId}-${Date.now()}`,
@@ -113,7 +139,7 @@ export const useConversationsStore = create<ConversationsState>((set, get) => {
         senderId: currentUser.id,
         senderName: currentUser.name || 'Você',
         senderType: 'user',
-        channel: get().conversations.find((c) => c.leadId === leadId)?.lead.channel || 'whatsapp',
+        channel: lead?.channel || 'whatsapp',
         createdAt: new Date().toISOString(),
         read: true,
       }
@@ -126,6 +152,33 @@ export const useConversationsStore = create<ConversationsState>((set, get) => {
             : conv
         ),
       }))
+
+      try {
+        const activeConnection = useConnectionsStore.getState().getActiveConnection()
+        
+        if (activeConnection?.provider === 'evolution' && activeConnection.instanceName && lead?.phone) {
+          await fetch('/api/evolution/send-message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              instanceName: activeConnection.instanceName,
+              recipientPhone: lead.phone.replace(/\D/g, ''), // limpar mascara, deixar so numeros
+              message: content,
+              tenantId: lead.tenantId,
+              leadId: lead.id,
+              senderId: currentUser.id,
+              senderName: currentUser.name || 'Você'
+            })
+          })
+        } else if (activeConnection?.provider === 'meta') {
+           // TODO: implementar rota de envio via Meta!
+           console.log('Envio via Meta sera roteado aqui.')
+        } else {
+             console.warn('Nenhuma conexao ativa encontrada. Mensagem criada apenas localmente.')
+        }
+      } catch (err) {
+        console.error('Falha ao enviar mensagem para API:', err)
+      }
 
       // "Assumir" lead
       useLeadsStore.getState().updateLead(leadId, { assignedTo: currentUser.id })
