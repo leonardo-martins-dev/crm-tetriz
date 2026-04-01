@@ -1,6 +1,6 @@
-# BRENO CRM - Omnichannel
+# NO PONTO CRM - Omnichannel
 
-CRM Omnichannel mockado para a agência BRENO, desenvolvido com Next.js, TypeScript e TailwindCSS.
+CRM Omnichannel mockado para a agência NO PONTO, desenvolvido com Next.js, TypeScript e TailwindCSS.
 
 ## 🚀 Tecnologias
 
@@ -31,8 +31,8 @@ npm start
 
 O sistema possui 3 usuários mockados:
 
-1. **Owner (Dono da BRENO)**
-   - Email: `joao@breno.com`
+1. **Owner (Dono da NO PONTO)**
+   - Email: `joao@noponto.com`
    - Senha: qualquer senha funciona
    - Acesso: área admin completa
 
@@ -86,7 +86,7 @@ O sistema possui 3 usuários mockados:
 ### Área Admin (Owner)
 - Gestão de clientes
 - Gestão de usuários
-- Métricas gerais da BRENO
+- Métricas gerais da NO PONTO
 - Ranking de clientes
 - Impersonate (acessar CRM do cliente)
 
@@ -135,5 +135,5 @@ Para transformar em um sistema real, seria necessário:
 
 ---
 
-Desenvolvido para a **Agência BRENO** 🚀
+Desenvolvido para a **Agência NO PONTO** 🚀
 

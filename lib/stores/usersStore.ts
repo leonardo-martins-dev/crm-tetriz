@@ -14,7 +14,7 @@ const initialUsers: User[] = [
   {
     id: '1',
     name: 'João Silva',
-    email: 'joao@breno.com',
+    email: 'joao@noponto.com',
     role: 'owner',
     active: true,
   },

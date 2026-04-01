@@ -23,11 +23,11 @@ export interface TenantConfig {
 export const defaultTenantConfig: TenantConfig = {
   branding: {
     id: 'default',
-    companyName: 'BRENO',
+    companyName: 'NO PONTO',
     productName: 'CRM',
-    fullProductName: 'BRENO CRM',
+    fullProductName: 'NO PONTO CRM',
     appDescription: 'CRM Omnichannel white-label',
-    supportEmail: 'suporte@breno.com',
+    supportEmail: 'suporte@noponto.com',
   },
   features: {
     inbox: true,

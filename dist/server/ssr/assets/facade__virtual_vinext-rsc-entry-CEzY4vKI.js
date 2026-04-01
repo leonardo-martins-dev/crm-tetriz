@@ -219,7 +219,7 @@ function AdminClientsPage() {
     /* @__PURE__ */ jsxs("div", { className: "flex items-center justify-between", children: [
       /* @__PURE__ */ jsxs("div", { children: [
         /* @__PURE__ */ jsx("h1", { className: "text-3xl font-bold", children: "Clientes" }),
-        /* @__PURE__ */ jsx("p", { className: "text-muted-foreground", children: "Gerencie todos os clientes da BRENO" })
+        /* @__PURE__ */ jsx("p", { className: "text-muted-foreground", children: "Gerencie todos os clientes da NO PONTO" })
       ] }),
       /* @__PURE__ */ jsxs(Button, { onClick: () => handleOpenModal(), children: [
         /* @__PURE__ */ jsx(Plus, { className: "h-4 w-4 mr-2" }),
@@ -400,7 +400,7 @@ function AdminMetricsPage() {
   return /* @__PURE__ */ jsxs("div", { className: "space-y-6", children: [
     /* @__PURE__ */ jsxs("div", { children: [
       /* @__PURE__ */ jsx("h1", { className: "text-3xl font-bold", children: "Métricas Gerais" }),
-      /* @__PURE__ */ jsx("p", { className: "text-muted-foreground", children: "Visão geral de todos os clientes da BRENO" })
+      /* @__PURE__ */ jsx("p", { className: "text-muted-foreground", children: "Visão geral de todos os clientes da NO PONTO" })
     ] }),
     /* @__PURE__ */ jsx("div", { className: "grid gap-4 md:grid-cols-2 lg:grid-cols-4", children: metrics.map((metric) => {
       const Icon2 = metric.icon;
@@ -573,7 +573,7 @@ function AdminUsersPage() {
     (user) => user.name.toLowerCase().includes(searchQuery.toLowerCase()) || user.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
   const getClientName = (clientId) => {
-    if (!clientId) return "BRENO";
+    if (!clientId) return "NO PONTO";
     return clients.find((c) => c.id === clientId)?.name || "N/A";
   };
   const getRoleLabel = (role) => {
@@ -2377,7 +2377,7 @@ function LoginPage() {
       /* @__PURE__ */ jsx(Button, { type: "submit", className: "w-full", children: "Entrar" }),
       /* @__PURE__ */ jsxs("div", { className: "text-xs text-muted-foreground space-y-1 pt-4 border-t", children: [
         /* @__PURE__ */ jsx("p", { className: "font-semibold", children: "Usuários de teste:" }),
-        /* @__PURE__ */ jsx("p", { children: "• joao@breno.com (Owner)" }),
+        /* @__PURE__ */ jsx("p", { children: "• joao@noponto.com (Owner)" }),
         /* @__PURE__ */ jsx("p", { children: "• maria@cliente1.com (Cliente)" }),
         /* @__PURE__ */ jsx("p", { className: "text-xs mt-2", children: "Qualquer senha funciona" })
       ] })

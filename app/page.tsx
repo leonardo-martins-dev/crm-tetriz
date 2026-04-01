@@ -82,7 +82,7 @@ export default function LoginPage() {
             </Button>
             <div className="text-xs text-muted-foreground space-y-1 pt-4 border-t">
               <p className="font-semibold">Usuários de teste:</p>
-              <p>• joao@breno.com (Owner)</p>
+              <p>• joao@noponto.com (Owner)</p>
               <p>• maria@cliente1.com (Cliente)</p>
               <p className="text-xs mt-2">Qualquer senha funciona</p>
             </div>
