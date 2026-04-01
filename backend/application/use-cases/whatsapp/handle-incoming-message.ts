@@ -3,7 +3,7 @@ import { ConversationRepository } from '../../repositories'
 import { MessageRepository } from '../../repositories'
 import { ConnectionRepository } from '../../repositories'
 import { AgentRepository } from '../../repositories'
-import { WhatsAppService, EvolutionApiService } from '../../services'
+import { WhatsAppService, EvolutionApiService, StorageService } from '../../services'
 import { AiOrchestratorService } from '../../services'
 import { MessageSenderType } from '../../../domain/enums'
 import { NotFoundError } from '../../../domain/errors/domain-errors'
@@ -17,6 +17,13 @@ export interface WebhookMessagePayload {
   text: string
   timestamp: string
   senderName?: string
+  media?: {
+    url?: string
+    base64?: string
+    mimetype: string
+    type: 'image' | 'audio' | 'video' | 'document'
+    fileName?: string
+  }
 }
 
 interface HandleIncomingMessageDeps {
@@ -28,6 +35,7 @@ interface HandleIncomingMessageDeps {
   whatsappService: WhatsAppService
   evolutionService?: EvolutionApiService
   aiOrchestrator: AiOrchestratorService
+  storageService: StorageService
 }
 
 /**
@@ -46,6 +54,7 @@ export async function handleIncomingMessage(
     whatsappService,
     evolutionService,
     aiOrchestrator,
+    storageService,
   } = deps
 
   // 1. Encontra a conexão
@@ -99,27 +108,66 @@ export async function handleIncomingMessage(
     })
   } else {
     conversation = await conversationRepo.update(tenantId, conversation.id, {
-      unreadCount: conversation.unreadCount + 1,
+      unreadCount: (conversation.unreadCount || 0) + 1,
       lastMessageAt: new Date().toISOString(),
     })
   }
 
-  // 4. Salva a mensagem
+  // 4. Trata mídia se houver
+  let finalMediaUrl = undefined
+  if (payload.media) {
+    try {
+      let fileBuffer: Buffer | ArrayBuffer | undefined
+
+      if (payload.media.base64) {
+        fileBuffer = Buffer.from(payload.media.base64, 'base64')
+      } else if (payload.media.url) {
+        const response = await fetch(payload.media.url)
+        if (response.ok) {
+          fileBuffer = await response.arrayBuffer()
+        }
+      }
+
+      if (fileBuffer) {
+        const extension = payload.media.mimetype.split('/')[1] || 'bin'
+        const fileName = `${payload.messageId}.${extension}`
+        const storagePath = `${tenantId}/${lead.id}/${fileName}`
+
+        const uploadResult = await storageService.uploadFile({
+          bucket: 'media-messages',
+          path: storagePath,
+          file: fileBuffer,
+          contentType: payload.media.mimetype,
+        })
+        finalMediaUrl = uploadResult.publicUrl
+      }
+    } catch (error) {
+      console.error('Erro ao processar mídia no webhook:', error)
+      // Prosseguimos mesmo sem a mídia para não perder a mensagem/texto
+    }
+  }
+
+  // 5. Salva a mensagem
   await messageRepo.create({
     tenantId,
     conversationId: conversation.id,
     leadId: lead.id,
-    content: payload.text,
+    content: payload.text || (payload.media ? `[Mídia: ${payload.media.type}]` : ''),
     senderId: lead.id,
     senderName: lead.name,
     senderType: MessageSenderType.LEAD,
     channel: 'whatsapp',
     read: false,
     wamid: payload.messageId,
+    mediaUrl: finalMediaUrl,
+    mediaType: payload.media?.type,
+    status: 'delivered',
   })
 
-  // 5. Verifica triggers de agentes IA
-  await checkAndTriggerAgents(lead, tenantId, conversation.id, payload.text, deps)
+  // 6. Verifica triggers de agentes IA
+  if (payload.text) {
+    await checkAndTriggerAgents(lead, tenantId, conversation.id, payload.text, deps)
+  }
 }
 
 /**

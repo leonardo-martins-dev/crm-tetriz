@@ -17,6 +17,18 @@ export class SupabaseMessageRepository implements MessageRepository {
     return (data || []).map(this.toDomain)
   }
 
+  async findByWamid(tenantId: string, wamid: string): Promise<Message | null> {
+    const { data, error } = await this.supabase
+      .from('messages')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .eq('wamid', wamid)
+      .maybeSingle()
+
+    if (error) throw new Error(error.message)
+    return data ? this.toDomain(data) : null
+  }
+
   async create(input: Omit<Message, 'id' | 'createdAt'>): Promise<Message> {
     const { data, error } = await this.supabase
       .from('messages')
@@ -31,7 +43,29 @@ export class SupabaseMessageRepository implements MessageRepository {
         channel: input.channel,
         read: input.read,
         wamid: input.wamid,
+        media_url: input.mediaUrl,
+        media_type: input.mediaType,
+        status: input.status,
       })
+      .select()
+      .single()
+
+    if (error) throw new Error(error.message)
+    return this.toDomain(data)
+  }
+
+  async update(tenantId: string, id: string, input: Partial<Message>): Promise<Message> {
+    const { data, error } = await this.supabase
+      .from('messages')
+      .update({
+        content: input.content,
+        read: input.read,
+        status: input.status,
+        media_url: input.mediaUrl,
+        media_type: input.mediaType,
+      })
+      .eq('tenant_id', tenantId)
+      .eq('id', id)
       .select()
       .single()
 
@@ -42,10 +76,10 @@ export class SupabaseMessageRepository implements MessageRepository {
   async markAsRead(tenantId: string, conversationId: string): Promise<void> {
     const { error } = await this.supabase
       .from('messages')
-      .update({ read: true })
+      .update({ read: true, status: 'read' })
       .eq('tenant_id', tenantId)
       .eq('conversation_id', conversationId)
-      .eq('read', false)
+      .neq('status', 'read')
 
     if (error) throw new Error(error.message)
   }
@@ -63,6 +97,9 @@ export class SupabaseMessageRepository implements MessageRepository {
       channel: row.channel,
       read: row.read,
       wamid: row.wamid,
+      status: row.status,
+      mediaUrl: row.media_url,
+      mediaType: row.media_type,
       createdAt: row.created_at,
     }
   }

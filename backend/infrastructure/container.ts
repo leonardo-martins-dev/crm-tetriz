@@ -8,6 +8,7 @@ import { SupabaseAgentRepository } from './repositories/supabase-agent.repositor
 import { MetaWhatsAppService } from './services/meta-whatsapp.service'
 import { EvolutionApiServiceImpl } from './services/evolution-api.service'
 import { OpenAiOrchestratorService } from './services/openai-orchestrator.service'
+import { SupabaseStorageServiceImpl } from './services/supabase-storage.service'
 
 /**
  * Injeção de Dependência rápida via factory.
@@ -25,6 +26,7 @@ export function createContainer(supabase: SupabaseClient) {
   const whatsappService = new MetaWhatsAppService()
   const evolutionService = new EvolutionApiServiceImpl()
   const aiOrchestrator = new OpenAiOrchestratorService()
+  const storageService = new SupabaseStorageServiceImpl(supabase)
 
   return {
     leadRepo,
@@ -35,6 +37,7 @@ export function createContainer(supabase: SupabaseClient) {
     whatsappService,
     evolutionService,
     aiOrchestrator,
+    storageService,
   }
 }
 

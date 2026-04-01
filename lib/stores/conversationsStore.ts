@@ -18,6 +18,10 @@ const mapMessageFromDb = (row: any): Message => ({
   channel: row.channel,
   createdAt: row.created_at,
   read: row.read,
+  status: row.status,
+  mediaUrl: row.media_url,
+  mediaType: row.media_type,
+  wamid: row.wamid,
 })
 
 interface ConversationsState {
@@ -29,6 +33,7 @@ interface ConversationsState {
   subscribeToMessages: (tenantId: string) => () => void
   setSelectedConversation: (leadId: string | null) => void
   sendMessage: (leadId: string, content: string) => Promise<void>
+  sendMediaMessage: (leadId: string, file: File, type: 'image' | 'audio' | 'video' | 'document') => Promise<void>
   getMessagesByLead: (leadId: string) => Message[]
   getConversationByLead: (leadId: string) => Conversation | null
 }
@@ -84,10 +89,20 @@ export const useConversationsStore = create<ConversationsState>((set, get) => {
           const newMessage = mapMessageFromDb(payload.new)
           
           set((state) => {
-            // Evitar duplicados (caso o sendMessage ja tenha adicionado localmente)
-            if (state.messages.find(m => m.id === newMessage.id)) return state
+            // Se já existir (otimista), atualizamos com os dados reais (id, wamid, status)
+            const existingIndex = state.messages.findIndex(m => 
+              (m.wamid && m.wamid === newMessage.wamid) || 
+              (m.id.startsWith('msg-') && m.content === newMessage.content && m.leadId === newMessage.leadId)
+            )
 
-            const updatedMessages = [...state.messages, newMessage]
+            let updatedMessages
+            if (existingIndex !== -1) {
+              updatedMessages = [...state.messages]
+              updatedMessages[existingIndex] = newMessage
+            } else {
+              updatedMessages = [...state.messages, newMessage]
+            }
+
             const updatedConversations = state.conversations.map((conv) =>
               conv.leadId === newMessage.leadId
                 ? { 
@@ -105,6 +120,35 @@ export const useConversationsStore = create<ConversationsState>((set, get) => {
                 const bTime = b.lastMessage?.createdAt || b.lead.updatedAt
                 return new Date(bTime).getTime() - new Date(aTime).getTime()
               })
+            }
+          })
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `tenant_id=eq.${tenantId}`
+        },
+        (payload) => {
+          const updatedMessage = mapMessageFromDb(payload.new)
+          
+          set((state) => {
+            const updatedMessages = state.messages.map(m => 
+              m.id === updatedMessage.id ? updatedMessage : m
+            )
+
+            const updatedConversations = state.conversations.map((conv) =>
+              conv.leadId === updatedMessage.leadId && conv.lastMessage?.id === updatedMessage.id
+                ? { ...conv, lastMessage: updatedMessage }
+                : conv
+            )
+
+            return {
+              messages: updatedMessages,
+              conversations: updatedConversations
             }
           })
         }
@@ -142,6 +186,7 @@ export const useConversationsStore = create<ConversationsState>((set, get) => {
         channel: lead?.channel || 'whatsapp',
         createdAt: new Date().toISOString(),
         read: true,
+        status: 'pending'
       }
 
       set((state) => ({
@@ -157,12 +202,12 @@ export const useConversationsStore = create<ConversationsState>((set, get) => {
         const activeConnection = useConnectionsStore.getState().getActiveConnection()
         
         if (activeConnection?.provider === 'evolution' && activeConnection.instanceName && lead?.phone) {
-          await fetch('/api/evolution/send-message', {
+          const response = await fetch('/api/evolution/send-message', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               instanceName: activeConnection.instanceName,
-              recipientPhone: lead.phone.replace(/\D/g, ''), // limpar mascara, deixar so numeros
+              recipientPhone: lead.phone.replace(/\D/g, ''),
               message: content,
               tenantId: lead.tenantId,
               leadId: lead.id,
@@ -170,11 +215,13 @@ export const useConversationsStore = create<ConversationsState>((set, get) => {
               senderName: currentUser.name || 'Você'
             })
           })
-        } else if (activeConnection?.provider === 'meta') {
-           // TODO: implementar rota de envio via Meta!
-           console.log('Envio via Meta sera roteado aqui.')
-        } else {
-             console.warn('Nenhuma conexao ativa encontrada. Mensagem criada apenas localmente.')
+          const result = await response.json()
+          if (result.success && result.wamid) {
+            // Atualizar mensagem local com o wamid real
+            set((state) => ({
+              messages: state.messages.map(m => m.id === newMessage.id ? { ...m, wamid: result.wamid } : m)
+            }))
+          }
         }
       } catch (err) {
         console.error('Falha ao enviar mensagem para API:', err)
@@ -182,6 +229,65 @@ export const useConversationsStore = create<ConversationsState>((set, get) => {
 
       // "Assumir" lead
       useLeadsStore.getState().updateLead(leadId, { assignedTo: currentUser.id })
+    },
+
+    sendMediaMessage: async (leadId: string, file: File, type: 'image' | 'audio' | 'video' | 'document') => {
+      const currentUser = useAuthStore.getState().user || { id: '1', name: 'Você' }
+      const lead = get().conversations.find((c) => c.leadId === leadId)?.lead
+      
+      const tempUrl = URL.createObjectURL(file)
+      const newMessage: Message = {
+        id: `msg-media-${leadId}-${Date.now()}`,
+        leadId,
+        content: `[Mídia: ${type}]`,
+        senderId: currentUser.id,
+        senderName: currentUser.name || 'Você',
+        senderType: 'user',
+        channel: lead?.channel || 'whatsapp',
+        createdAt: new Date().toISOString(),
+        read: true,
+        status: 'pending',
+        mediaUrl: tempUrl,
+        mediaType: type
+      }
+
+      set((state) => ({
+        messages: [...state.messages, newMessage],
+        conversations: state.conversations.map((conv) =>
+          conv.leadId === leadId
+            ? { ...conv, lastMessage: newMessage, unreadCount: 0 }
+            : conv
+        ),
+      }))
+
+      try {
+        const activeConnection = useConnectionsStore.getState().getActiveConnection()
+        if (!activeConnection || !lead?.phone) return
+
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('type', type)
+        formData.append('instanceName', activeConnection.instanceName || '')
+        formData.append('recipientPhone', lead.phone.replace(/\D/g, ''))
+        formData.append('tenantId', lead.tenantId || '')
+        formData.append('leadId', lead.id)
+        formData.append('senderId', currentUser.id)
+        formData.append('senderName', currentUser.name || 'Você')
+
+        const response = await fetch('/api/evolution/send-media', {
+          method: 'POST',
+          body: formData
+        })
+        
+        const result = await response.json()
+        if (result.success && result.wamid) {
+           set((state) => ({
+             messages: state.messages.map(m => m.id === newMessage.id ? { ...m, wamid: result.wamid, mediaUrl: result.mediaUrl } : m)
+           }))
+        }
+      } catch (err) {
+        console.error('Falha ao enviar mídia:', err)
+      }
     },
 
     getMessagesByLead: (leadId: string) => {

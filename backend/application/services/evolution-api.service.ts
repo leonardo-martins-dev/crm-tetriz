@@ -38,6 +38,16 @@ export interface EvolutionApiService {
     message: string
   }): Promise<{ key: { id: string } }>
 
+  sendMediaMessage(params: {
+    instanceName: string
+    apiKey: string
+    recipientPhone: string
+    media: string // URL ou Base64
+    mediaType: 'image' | 'audio' | 'video' | 'document'
+    caption?: string
+    fileName?: string
+  }): Promise<{ key: { id: string } }>
+
   setWebhook(params: {
     instanceName: string
     apiKey: string

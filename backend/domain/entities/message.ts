@@ -11,6 +11,9 @@ export interface Message {
   senderType: MessageSenderType
   channel: string
   read: boolean
-  wamid?: string // WhatsApp Message ID (Meta)
+  wamid?: string // WhatsApp Message ID (Meta/Evolution)
+  status?: 'pending' | 'sent' | 'delivered' | 'read' | 'failed'
+  mediaUrl?: string
+  mediaType?: 'image' | 'audio' | 'video' | 'document'
   createdAt: string
 }

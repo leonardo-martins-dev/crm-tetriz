@@ -74,6 +74,10 @@ export interface Message {
   channel: Channel
   createdAt: string
   read: boolean
+  wamid?: string
+  status?: 'pending' | 'sent' | 'delivered' | 'read' | 'failed'
+  mediaUrl?: string
+  mediaType?: 'image' | 'audio' | 'video' | 'document'
 }
 
 export interface Conversation {

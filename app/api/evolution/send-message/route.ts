@@ -61,6 +61,8 @@ export async function POST(req: Request) {
       }
 
       if (conversation) {
+        const wamid = data.key?.id
+        
         await supabase.from('messages').insert({
           tenant_id: tenantId,
           conversation_id: conversation.id,
@@ -70,7 +72,9 @@ export async function POST(req: Request) {
           sender_name: senderName || 'Atendente',
           sender_type: 'user',
           channel: 'whatsapp',
-          read: true
+          read: true,
+          wamid: wamid,
+          status: wamid ? 'sent' : 'failed'
         })
 
         // Atualizar last_message_at na conversa

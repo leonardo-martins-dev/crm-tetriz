@@ -10,16 +10,31 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { formatRelativeTime } from '@/lib/utils'
-import { Send, Clock, Lock, ChevronLeft, ChevronRight, Bot, User as UserIcon } from 'lucide-react'
+import { 
+  Send, Clock, Lock, ChevronLeft, ChevronRight, Bot, User as UserIcon, 
+  Paperclip, Image as ImageIcon, Music, Video, FileText, 
+  Check, CheckCheck, AlertCircle 
+} from 'lucide-react'
 import { LeadCard } from '@/components/LeadCard'
+import { useRef } from 'react'
 
 export default function InboxPage() {
-  const { conversations, selectedConversationId, setSelectedConversation, sendMessage, getMessagesByLead, initializeConversations } = useConversationsStore()
-  const { selectedLead, setSelectedLead, leads } = useLeadsStore()
+  const { 
+    conversations, 
+    selectedConversationId, 
+    setSelectedConversation, 
+    sendMessage, 
+    sendMediaMessage,
+    getMessagesByLead, 
+    initializeConversations 
+  } = useConversationsStore()
+  
+  const { setSelectedLead, leads } = useLeadsStore()
   const { users } = useUsersStore()
   const { agents } = useAgentsStore()
   const [messageInput, setMessageInput] = useState('')
   const [isLeadPanelOpen, setIsLeadPanelOpen] = useState(true)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (leads.length > 0 && conversations.length === 0) {
@@ -42,6 +57,77 @@ export default function InboxPage() {
 
     sendMessage(selectedConversationId, messageInput)
     setMessageInput('')
+  }
+
+  const handleFileClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !selectedConversationId) return
+
+    let type: 'image' | 'audio' | 'video' | 'document' = 'document'
+    if (file.type.startsWith('image/')) type = 'image'
+    else if (file.type.startsWith('audio/')) type = 'audio'
+    else if (file.type.startsWith('video/')) type = 'video'
+
+    await sendMediaMessage(selectedConversationId, file, type)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const getStatusIcon = (status: string | undefined) => {
+    switch (status) {
+      case 'pending': return <Clock className="h-3 w-3 text-muted-foreground/50" />
+      case 'sent': return <Check className="h-3 w-3 text-muted-foreground/70" />
+      case 'delivered': return <CheckCheck className="h-3 w-3 text-muted-foreground/70" />
+      case 'read': return <CheckCheck className="h-3 w-3 text-blue-400" />
+      case 'failed': return <AlertCircle className="h-3 w-3 text-destructive" />
+      default: return null
+    }
+  }
+
+  const renderMedia = (message: any) => {
+    if (!message.mediaUrl) return null
+
+    switch (message.mediaType) {
+      case 'image':
+        return (
+          <div className="mt-2 rounded-lg overflow-hidden border border-white/10 max-w-sm">
+            <img src={message.mediaUrl} alt="Mídia" className="w-full h-auto object-cover max-h-60" />
+          </div>
+        )
+      case 'audio':
+        return (
+          <div className="mt-2 min-w-[200px]">
+            <audio controls className="h-8 w-full">
+              <source src={message.mediaUrl} type="audio/mpeg" />
+            </audio>
+          </div>
+        )
+      case 'video':
+        return (
+          <div className="mt-2 rounded-lg overflow-hidden border border-white/10 max-w-sm">
+            <video controls className="w-full h-auto max-h-60">
+              <source src={message.mediaUrl} type="video/mp4" />
+            </video>
+          </div>
+        )
+      case 'document':
+        return (
+          <a 
+            href={message.mediaUrl} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 mt-2 p-2 rounded bg-background/20 hover:bg-background/30 transition-colors border border-white/5"
+          >
+            <FileText className="h-4 w-4" />
+            <span className="text-xs truncate max-w-[150px]">Ver Documento</span>
+          </a>
+        )
+      default:
+        return null
+    }
   }
 
   const getAssignedInfo = (assignedId: string | undefined) => {
@@ -93,14 +179,21 @@ export default function InboxPage() {
                       )}
                     </div>
                     {conv.lastMessage && (
-                      <p className="text-sm text-muted-foreground truncate">
+                      <p className="text-sm text-muted-foreground truncate flex items-center gap-1">
+                        {conv.lastMessage.mediaType === 'image' && <ImageIcon className="h-3 w-3" />}
+                        {conv.lastMessage.mediaType === 'audio' && <Music className="h-3 w-3" />}
+                        {conv.lastMessage.mediaType === 'video' && <Video className="h-3 w-3" />}
+                        {conv.lastMessage.mediaType === 'document' && <FileText className="h-3 w-3" />}
                         {conv.lastMessage.content}
                       </p>
                     )}
                     {conv.lastMessage && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {formatRelativeTime(conv.lastMessage.createdAt)}
-                      </p>
+                      <div className="flex items-center justify-between mt-1">
+                        <p className="text-xs text-muted-foreground">
+                          {formatRelativeTime(conv.lastMessage.createdAt)}
+                        </p>
+                        {conv.lastMessage.senderType !== 'lead' && getStatusIcon(conv.lastMessage.status)}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -143,7 +236,7 @@ export default function InboxPage() {
                           <Lock className="h-3 w-3" />
                           Janela fechada
                         </Badge>
-                      )}
+                      ) }
                     </div>
                   </div>
                 </div>
@@ -189,10 +282,14 @@ export default function InboxPage() {
                             : 'bg-muted text-muted-foreground'
                         }`}
                       >
-                        <p className="text-sm">{message.content}</p>
-                        <p className={`text-xs mt-1 ${isSystem ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-                          {formatRelativeTime(message.createdAt)}
-                        </p>
+                        {renderMedia(message)}
+                        <p className="text-sm mt-1">{message.content}</p>
+                        <div className="flex items-center gap-1 mt-1 justify-end">
+                          <p className={`text-[10px] ${isSystem ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                            {formatRelativeTime(message.createdAt)}
+                          </p>
+                          {isSystem && getStatusIcon(message.status)}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -211,6 +308,20 @@ export default function InboxPage() {
                 </div>
               ) : (
                 <div className="flex gap-2">
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    className="hidden" 
+                    onChange={handleFileChange}
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={handleFileClick}
+                    disabled={!selectedConversation.lead.window24hOpen}
+                  >
+                    <Paperclip className="h-4 w-4" />
+                  </Button>
                   <Input
                     value={messageInput}
                     onChange={(e) => setMessageInput(e.target.value)}

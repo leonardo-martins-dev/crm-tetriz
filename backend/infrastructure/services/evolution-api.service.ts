@@ -117,6 +117,43 @@ export class EvolutionApiServiceImpl implements EvolutionApiService {
     return response.json()
   }
 
+  async sendMediaMessage(params: {
+    instanceName: string
+    apiKey: string
+    recipientPhone: string
+    media: string
+    mediaType: 'image' | 'audio' | 'video' | 'document'
+    caption?: string
+    fileName?: string
+  }): Promise<{ key: { id: string } }> {
+    const url = `${EVOLUTION_API_URL}/message/sendMedia/${params.instanceName}`
+    
+    // Mapear mediaType para o formato da Evolution (image, video, audio, document)
+    const payload: any = {
+      number: params.recipientPhone,
+      mediatype: params.mediaType,
+      media: params.media,
+      caption: params.caption,
+      fileName: params.fileName,
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: params.apiKey,
+      },
+      body: JSON.stringify(payload),
+    })
+
+    if (!response.ok) {
+      const errorBody = await response.text()
+      throw new ExternalServiceError('Evolution API Send Media', `Falha ao enviar mídia: ${response.status} - ${errorBody}`)
+    }
+
+    return response.json()
+  }
+
   async setWebhook(params: {
     instanceName: string
     apiKey: string
