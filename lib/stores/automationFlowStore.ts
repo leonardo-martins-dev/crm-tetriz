@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import { JsonObject } from '@/domain/types/json'
+import { useAuthStore } from './authStore'
+import { getAutomationRepository } from '@/infrastructure/repositories'
 
 export type NodeType = 'trigger' | 'action' | 'condition' | 'delay' | 'webhook'
 
@@ -9,7 +11,7 @@ export interface Node {
   label: string
   position: { x: number; y: number }
   data: JsonObject
-  connections: string[] // IDs dos nós conectados
+  connections: string[]
 }
 
 export interface AutomationFlow {
@@ -20,11 +22,11 @@ export interface AutomationFlow {
 }
 
 interface AutomationFlowState {
-  flows: AutomationFlow[]
   currentFlow: AutomationFlow | null
   selectedNodeId: string | null
-  setCurrentFlow: (flowId: string) => void
-  createFlow: (name: string) => void
+  isLoading: boolean
+  fetchFlow: (flowId: string) => Promise<void>
+  saveFlow: () => Promise<void>
   addNode: (type: NodeType, position: { x: number; y: number }) => void
   updateNode: (nodeId: string, updates: Partial<Node>) => void
   deleteNode: (nodeId: string) => void
@@ -35,69 +37,63 @@ interface AutomationFlowState {
 }
 
 const nodeTemplates: Record<NodeType, { label: string; color: string; icon: string }> = {
-  trigger: {
-    label: 'Trigger',
-    color: 'bg-green-500',
-    icon: '⚡',
-  },
-  action: {
-    label: 'Ação',
-    color: 'bg-blue-500',
-    icon: '▶',
-  },
-  condition: {
-    label: 'Condição',
-    color: 'bg-yellow-500',
-    icon: '❓',
-  },
-  delay: {
-    label: 'Atraso',
-    color: 'bg-purple-500',
-    icon: '⏱',
-  },
-  webhook: {
-    label: 'Webhook',
-    color: 'bg-orange-500',
-    icon: '🔗',
-  },
+  trigger: { label: 'Trigger', color: 'bg-green-500', icon: '⚡' },
+  action: { label: 'Ação', color: 'bg-blue-500', icon: '▶' },
+  condition: { label: 'Condição', color: 'bg-yellow-500', icon: '❓' },
+  delay: { label: 'Atraso', color: 'bg-purple-500', icon: '⏱' },
+  webhook: { label: 'Webhook', color: 'bg-orange-500', icon: '🔗' },
 }
 
-const initialFlows: AutomationFlow[] = [
-  {
-    id: 'flow-1',
-    name: 'Boas-vindas Automáticas',
-    active: true,
-    nodes: [],
-  },
-]
+const automationRepo = getAutomationRepository()
 
 export const useAutomationFlowStore = create<AutomationFlowState>((set, get) => ({
-  flows: initialFlows,
   currentFlow: null,
   selectedNodeId: null,
+  isLoading: false,
 
-  setCurrentFlow: (flowId: string) => {
-    const flow = get().flows.find((f) => f.id === flowId)
-    if (flow) {
-      set({ currentFlow: flow })
+  fetchFlow: async (flowId: string) => {
+    const tenantId = useAuthStore.getState().user?.tenantId
+    if (!tenantId) return
+
+    set({ isLoading: true })
+    try {
+      const data = await automationRepo.findById(tenantId, flowId)
+
+      if (!data) throw new Error('Fluxo não encontrado')
+
+      set({ 
+        currentFlow: {
+          id: data.id,
+          name: data.name,
+          nodes: (data.nodes as Node[]) || [],
+          active: data.active
+        }, 
+        isLoading: false 
+      })
+    } catch (error) {
+      console.error('Erro ao buscar fluxo:', error)
+      set({ isLoading: false })
     }
   },
 
-  createFlow: (name: string) => {
-    const newFlow: AutomationFlow = {
-      id: `flow-${Date.now()}`,
-      name,
-      nodes: [],
-      active: false,
+  saveFlow: async () => {
+    const flow = get().currentFlow
+    const tenantId = useAuthStore.getState().user?.tenantId
+    if (!flow || !tenantId) return
+
+    try {
+      await automationRepo.update(tenantId, flow.id, {
+        name: flow.name,
+        nodes: flow.nodes as any,
+        active: flow.active
+      })
+    } catch (error) {
+      console.error('Erro ao salvar fluxo:', error)
     }
-    set((state) => ({
-      flows: [...state.flows, newFlow],
-      currentFlow: newFlow,
-    }))
   },
 
-  addNode: (type: NodeType, position: { x: number; y: number }) => {
-    const currentFlow = get().currentFlow
+  addNode: (type, position) => {
+    const { currentFlow } = get()
     if (!currentFlow) return
 
     const template = nodeTemplates[type]
@@ -110,61 +106,33 @@ export const useAutomationFlowStore = create<AutomationFlowState>((set, get) => 
       connections: [],
     }
 
-    set((state) => ({
-      flows: state.flows.map((flow) =>
-        flow.id === currentFlow.id
-          ? { ...flow, nodes: [...flow.nodes, newNode] }
-          : flow
-      ),
+    set({
       currentFlow: {
         ...currentFlow,
         nodes: [...currentFlow.nodes, newNode],
       },
-    }))
+    })
   },
 
-  updateNode: (nodeId: string, updates: Partial<Node>) => {
-    const currentFlow = get().currentFlow
+  updateNode: (nodeId, updates) => {
+    const { currentFlow } = get()
     if (!currentFlow) return
 
-    set((state) => ({
-      flows: state.flows.map((flow) =>
-        flow.id === currentFlow.id
-          ? {
-              ...flow,
-              nodes: flow.nodes.map((node) =>
-                node.id === nodeId ? { ...node, ...updates } : node
-              ),
-            }
-          : flow
-      ),
+    set({
       currentFlow: {
         ...currentFlow,
         nodes: currentFlow.nodes.map((node) =>
           node.id === nodeId ? { ...node, ...updates } : node
         ),
       },
-    }))
+    })
   },
 
-  deleteNode: (nodeId: string) => {
-    const currentFlow = get().currentFlow
+  deleteNode: (nodeId) => {
+    const { currentFlow } = get()
     if (!currentFlow) return
 
-    set((state) => ({
-      flows: state.flows.map((flow) =>
-        flow.id === currentFlow.id
-          ? {
-              ...flow,
-              nodes: flow.nodes
-                .filter((node) => node.id !== nodeId)
-                .map((node) => ({
-                  ...node,
-                  connections: node.connections.filter((id) => id !== nodeId),
-                })),
-            }
-          : flow
-      ),
+    set({
       currentFlow: {
         ...currentFlow,
         nodes: currentFlow.nodes
@@ -174,27 +142,15 @@ export const useAutomationFlowStore = create<AutomationFlowState>((set, get) => 
             connections: node.connections.filter((id) => id !== nodeId),
           })),
       },
-      selectedNodeId: state.selectedNodeId === nodeId ? null : state.selectedNodeId,
-    }))
+      selectedNodeId: get().selectedNodeId === nodeId ? null : get().selectedNodeId,
+    })
   },
 
-  connectNodes: (fromNodeId: string, toNodeId: string) => {
-    const currentFlow = get().currentFlow
+  connectNodes: (fromNodeId, toNodeId) => {
+    const { currentFlow } = get()
     if (!currentFlow) return
 
-    set((state) => ({
-      flows: state.flows.map((flow) =>
-        flow.id === currentFlow.id
-          ? {
-              ...flow,
-              nodes: flow.nodes.map((node) =>
-                node.id === fromNodeId
-                  ? { ...node, connections: [...node.connections, toNodeId] }
-                  : node
-              ),
-            }
-          : flow
-      ),
+    set({
       currentFlow: {
         ...currentFlow,
         nodes: currentFlow.nodes.map((node) =>
@@ -203,26 +159,14 @@ export const useAutomationFlowStore = create<AutomationFlowState>((set, get) => 
             : node
         ),
       },
-    }))
+    })
   },
 
-  disconnectNodes: (fromNodeId: string, toNodeId: string) => {
-    const currentFlow = get().currentFlow
+  disconnectNodes: (fromNodeId, toNodeId) => {
+    const { currentFlow } = get()
     if (!currentFlow) return
 
-    set((state) => ({
-      flows: state.flows.map((flow) =>
-        flow.id === currentFlow.id
-          ? {
-              ...flow,
-              nodes: flow.nodes.map((node) =>
-                node.id === fromNodeId
-                  ? { ...node, connections: node.connections.filter((id) => id !== toNodeId) }
-                  : node
-              ),
-            }
-          : flow
-      ),
+    set({
       currentFlow: {
         ...currentFlow,
         nodes: currentFlow.nodes.map((node) =>
@@ -231,25 +175,16 @@ export const useAutomationFlowStore = create<AutomationFlowState>((set, get) => 
             : node
         ),
       },
-    }))
+    })
   },
 
-  setSelectedNode: (nodeId: string | null) => {
-    set({ selectedNodeId: nodeId })
-  },
+  setSelectedNode: (nodeId) => set({ selectedNodeId: nodeId }),
 
-  updateFlow: (updates: Partial<AutomationFlow>) => {
-    const currentFlow = get().currentFlow
+  updateFlow: (updates) => {
+    const { currentFlow } = get()
     if (!currentFlow) return
-
-    set((state) => ({
-      flows: state.flows.map((flow) =>
-        flow.id === currentFlow.id ? { ...flow, ...updates } : flow
-      ),
-      currentFlow: { ...currentFlow, ...updates },
-    }))
+    set({ currentFlow: { ...currentFlow, ...updates } })
   },
 }))
 
 export { nodeTemplates }
-

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/lib/stores/authStore'
+import { getTagRepository } from '@/infrastructure/repositories'
 
 export interface Tag {
   id: string
@@ -27,6 +27,8 @@ const defaultTagColors = [
   '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1', '#14b8a6',
 ]
 
+const tagRepo = getTagRepository()
+
 export const useTagsStore = create<TagsState>((set, get) => ({
   tags: [],
   isLoading: false,
@@ -37,22 +39,16 @@ export const useTagsStore = create<TagsState>((set, get) => ({
 
     set({ isLoading: true })
     try {
-      const { data, error } = await supabase
-        .from('tags')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .order('name', { ascending: true })
-
-      if (error) throw error
+      const tags = await tagRepo.findByTenantId(tenantId)
 
       set({ 
-        tags: (data || []).map(row => ({
+        tags: tags.map(row => ({
           id: row.id,
-          tenantId: row.tenant_id,
+          tenantId: row.tenantId,
           name: row.name,
           color: row.color,
-          createdAt: row.created_at,
-          leadCount: 0 // TODO: Calcular via join ou RPC se necessário
+          createdAt: row.createdAt,
+          leadCount: 0 // TODO: Calcular no LeadRepository se necessário
         })), 
         isLoading: false 
       })
@@ -72,24 +68,18 @@ export const useTagsStore = create<TagsState>((set, get) => ({
     const finalColor = color || defaultTagColors[Math.floor(Math.random() * defaultTagColors.length)]
 
     try {
-      const { data, error } = await supabase
-        .from('tags')
-        .insert({
-          tenant_id: tenantId,
-          name: name.trim(),
-          color: finalColor
-        })
-        .select()
-        .single()
-
-      if (error) throw error
+      const data = await tagRepo.create({
+        tenantId,
+        name: name.trim(),
+        color: finalColor
+      })
 
       const newTag: Tag = {
         id: data.id,
-        tenantId: data.tenant_id,
+        tenantId: data.tenantId,
         name: data.name,
         color: data.color,
-        createdAt: data.created_at,
+        createdAt: data.createdAt,
         leadCount: 0
       }
 
@@ -100,16 +90,14 @@ export const useTagsStore = create<TagsState>((set, get) => ({
   },
 
   updateTag: async (tagId, updates) => {
-    try {
-      const { error } = await supabase
-        .from('tags')
-        .update({
-          name: updates.name,
-          color: updates.color
-        })
-        .eq('id', tagId)
+    const tenantId = useAuthStore.getState().user?.tenantId
+    if (!tenantId) return
 
-      if (error) throw error
+    try {
+      await tagRepo.update(tenantId, tagId, {
+        name: updates.name,
+        color: updates.color
+      })
 
       set((state) => ({
         tags: state.tags.map((tag) =>
@@ -122,13 +110,11 @@ export const useTagsStore = create<TagsState>((set, get) => ({
   },
 
   deleteTag: async (tagId) => {
-    try {
-      const { error } = await supabase
-        .from('tags')
-        .delete()
-        .eq('id', tagId)
+    const tenantId = useAuthStore.getState().user?.tenantId
+    if (!tenantId) return
 
-      if (error) throw error
+    try {
+      await tagRepo.delete(tenantId, tagId)
 
       set((state) => ({
         tags: state.tags.filter((tag) => tag.id !== tagId),

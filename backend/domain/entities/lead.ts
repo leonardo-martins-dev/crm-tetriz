@@ -10,6 +10,8 @@ export interface Lead {
   status: LeadStatus
   pipelineStage: string
   assignedTo?: string
+  tags: string[]
+  notes: any[]
   score: number
   priority: 'low' | 'medium' | 'high'
   campaign?: string

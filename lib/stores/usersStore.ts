@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { User, UserRole } from '@/types'
-import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/lib/stores/authStore'
+import { getProfileRepository } from '@/infrastructure/repositories'
 
 interface UsersState {
   users: User[]
@@ -13,6 +13,8 @@ interface UsersState {
   deleteUser: (id: string) => Promise<void>
 }
 
+const profileRepo = getProfileRepository()
+
 export const useUsersStore = create<UsersState>((set, get) => ({
   users: [],
   isLoading: false,
@@ -23,21 +25,15 @@ export const useUsersStore = create<UsersState>((set, get) => ({
 
     set({ isLoading: true })
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .order('name', { ascending: true })
+      const profiles = await profileRepo.listByTenant(tenantId)
 
-      if (error) throw error
-
-      const users: User[] = (data || []).map(profile => ({
+      const users: User[] = profiles.map(profile => ({
         id: profile.id,
         name: profile.name,
         email: profile.email,
         role: profile.role as UserRole,
-        avatar: profile.avatar_url,
-        tenantId: profile.tenant_id,
+        avatar: profile.avatarUrl,
+        tenantId: profile.tenantId,
         active: profile.active,
       }))
 
@@ -55,17 +51,12 @@ export const useUsersStore = create<UsersState>((set, get) => ({
 
   updateUser: async (id, updates) => {
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          name: updates.name,
-          role: updates.role,
-          avatar_url: updates.avatar,
-          active: updates.active
-        })
-        .eq('id', id)
-
-      if (error) throw error
+      await profileRepo.update(id, {
+        name: updates.name,
+        role: updates.role as any,
+        avatarUrl: updates.avatar,
+        active: updates.active
+      })
 
       set((state) => ({
         users: state.users.map((user) =>
@@ -85,15 +76,7 @@ export const useUsersStore = create<UsersState>((set, get) => ({
 
   deleteUser: async (id) => {
     try {
-      // Nota: No Supabase, deletar do profiles não deleta do Auth. 
-      // Isso deve ser feito via Edge Function de Admin.
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', id)
-
-      if (error) throw error
-
+      await profileRepo.delete(id)
       set((state) => ({
         users: state.users.filter((user) => user.id !== id),
       }))

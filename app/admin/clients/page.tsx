@@ -1,6 +1,4 @@
-'use client'
-
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/lib/stores/authStore'
 import { useClientsStore, AVAILABLE_MODULES } from '@/lib/stores/clientsStore'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
@@ -8,7 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
-import { Building2, Users, TrendingUp, Eye, Plus, Edit2, Power, PowerOff, Crown, Zap, Rocket, Package } from 'lucide-react'
+import { Building2, Users, TrendingUp, Eye, Plus, Edit2, Power, PowerOff, Crown, Zap, Rocket, Package, Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { Client, ClientPlan } from '@/types'
 import { defaultTenantConfig } from '@/config/tenant'
@@ -20,11 +18,16 @@ const PLAN_CONFIG: Record<ClientPlan, { label: string; color: string; icon: type
 }
 
 export default function AdminClientsPage() {
-  const { selectClient } = useAuthStore()
-  const { clients, addClient, updateClient, toggleClientActive } = useClientsStore()
+  const { setClient } = useAuthStore()
+  const { clients, isLoading, fetchClients, addClient, updateClient, toggleClientActive } = useClientsStore()
   const router = useRouter()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingClient, setEditingClient] = useState<Client | null>(null)
+
+  useEffect(() => {
+    fetchClients()
+  }, [fetchClients])
+
   const [formData, setFormData] = useState({
     name: '',
     active: true,
@@ -36,7 +39,7 @@ export default function AdminClientsPage() {
   const handleViewClient = (clientId: string) => {
     const selectedClient = clients.find((c) => c.id === clientId)
     if (selectedClient) {
-      selectClient(clientId, clients)
+      setClient(selectedClient)
       router.push('/dashboard/inbox')
     }
   }
@@ -113,7 +116,12 @@ export default function AdminClientsPage() {
         </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      {isLoading ? (
+        <div className="flex items-center justify-center p-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {clients.map((client) => {
           const planConfig = PLAN_CONFIG[client.plan]
           const PlanIcon = planConfig.icon
@@ -207,8 +215,9 @@ export default function AdminClientsPage() {
           )
         })}
       </div>
+      )}
 
-      {clients.length === 0 && (
+      {!isLoading && clients.length === 0 && (
         <Card>
           <CardContent className="p-12 text-center">
             <p className="text-muted-foreground">Nenhum cliente cadastrado</p>

@@ -6,4 +6,5 @@ export interface ProfileRepository {
   listByTenant(tenantId: string): Promise<Profile[]>
   create(profile: Profile): Promise<Profile>
   update(id: string, updates: Partial<Profile>): Promise<Profile>
+  delete(id: string): Promise<void>
 }

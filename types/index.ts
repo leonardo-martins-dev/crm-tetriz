@@ -126,7 +126,7 @@ export interface Broadcast {
   pipelineStage?: string
   scheduledAt?: string
   sentAt?: string
-  broadcastStatus: 'draft' | 'scheduled' | 'sent' | 'failed'
+  broadcastStatus: 'draft' | 'scheduled' | 'sending' | 'sent' | 'failed'
   totalRecipients: number
   sentCount: number
   failedCount: number

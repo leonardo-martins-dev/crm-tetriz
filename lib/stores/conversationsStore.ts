@@ -1,27 +1,12 @@
 import { create } from 'zustand'
 import { Message, Conversation, Lead } from '@/types'
-import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/lib/stores/authStore'
 import { useConnectionsStore } from '@/lib/stores/connectionsStore'
-import { useLeadsStore } from '@/lib/stores/leadsStore'
+import { getMessageRepository, getConversationRepository } from '@/infrastructure/repositories'
 
 // Mapper para converter snake_case do Supabase para camelCase do TS
-const mapMessageFromDb = (row: any): Message => ({
-  id: row.id,
-  tenantId: row.tenant_id,
-  leadId: row.lead_id,
-  content: row.content,
-  senderId: row.sender_id,
-  senderName: row.sender_name,
-  senderType: row.sender_type as any,
-  channel: row.channel as any,
-  createdAt: row.created_at,
-  read: row.read,
-  status: row.status as any,
-  mediaUrl: row.media_url,
-  mediaType: row.media_type as any,
-  wamid: row.wamid,
-})
+const messageRepo = getMessageRepository()
+const conversationRepo = getConversationRepository()
 
 interface ConversationsState {
   messages: Message[]
@@ -51,19 +36,9 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
     if (!tenantId || leads.length === 0) return
     
     set({ isLoading: true })
-    const { data: dbMessages, error } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .order('created_at', { ascending: true })
-
-    if (error) {
-      console.error('Erro ao buscar mensagens:', error)
-      set({ isLoading: false })
-      return
-    }
-
-    const allMessages = (dbMessages || []).map(mapMessageFromDb)
+    try {
+      const messages = await messageRepo.listByTenant(tenantId)
+      const allMessages = messages as any[]
 
     const conversations: Conversation[] = leads.map((lead) => {
       const leadMessages = allMessages.filter((m) => m.leadId === lead.id)
@@ -79,22 +54,28 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
       }
     })
 
-    set({
-      messages: allMessages,
-      conversations: conversations.sort((a, b) => {
-        const aTime = a.lastMessage?.createdAt || a.lead.updatedAt
-        const bTime = b.lastMessage?.createdAt || b.lead.updatedAt
-        return new Date(bTime).getTime() - new Date(aTime).getTime()
-      }),
-      initialized: true,
-      isLoading: false
-    })
+      set({
+        messages: allMessages,
+        conversations: conversations.sort((a, b) => {
+          const aTime = a.lastMessage?.createdAt || a.lead.updatedAt
+          const bTime = b.lastMessage?.createdAt || b.lead.updatedAt
+          return new Date(bTime).getTime() - new Date(aTime).getTime()
+        }),
+        initialized: true,
+        isLoading: false
+      })
+    } catch (err) {
+      console.error('Erro ao inicializar conversas:', err)
+      set({ isLoading: false })
+    }
   },
 
   subscribeToMessages: () => {
     const tenantId = useAuthStore.getState().user?.tenantId
     if (!tenantId) return () => {}
 
+    // Importar supabase apenas para o Realtime, já que repositórios são Request/Response
+    const { supabase } = require('@/lib/supabase')
     const channel = supabase
       .channel(`tenant_${tenantId}_messages`)
       .on(
@@ -107,7 +88,23 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
         },
         async (payload) => {
           if (payload.eventType === 'INSERT') {
-            const newMessage = mapMessageFromDb(payload.new)
+            // Aqui ainda precisamos do mapeamento local pois o payload do Realtime é snake_case
+            const newMessage: Message = {
+              id: payload.new.id,
+              tenantId: payload.new.tenant_id,
+              leadId: payload.new.lead_id,
+              content: payload.new.content,
+              senderId: payload.new.sender_id,
+              senderName: payload.new.sender_name,
+              senderType: payload.new.sender_type,
+              channel: payload.new.channel,
+              createdAt: payload.new.created_at,
+              read: payload.new.read,
+              status: payload.new.status,
+              mediaUrl: payload.new.media_url,
+              mediaType: payload.new.media_type,
+              wamid: payload.new.wamid,
+            }
             
             set((state) => {
               // De-duplicação de mensagem otimista
@@ -139,7 +136,23 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
               }
             })
           } else if (payload.eventType === 'UPDATE') {
-            const updatedMsg = mapMessageFromDb(payload.new)
+            const oldMsg = payload.new
+            const updatedMsg: Message = {
+              id: oldMsg.id,
+              tenantId: oldMsg.tenant_id,
+              leadId: oldMsg.lead_id,
+              content: oldMsg.content,
+              senderId: oldMsg.sender_id,
+              senderName: oldMsg.sender_name,
+              senderType: oldMsg.sender_type,
+              channel: oldMsg.channel,
+              createdAt: oldMsg.created_at,
+              read: oldMsg.read,
+              status: oldMsg.status,
+              mediaUrl: oldMsg.media_url,
+              mediaType: oldMsg.media_type,
+              wamid: oldMsg.wamid,
+            }
             set((state) => ({
               messages: state.messages.map(m => m.id === updatedMsg.id ? updatedMsg : m)
             }))

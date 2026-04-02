@@ -6,5 +6,6 @@ export interface Automation {
   condition?: string
   action: string
   active: boolean
+  nodes?: any[]
   createdAt: string
 }

@@ -17,6 +17,17 @@ export class SupabaseMessageRepository implements MessageRepository {
     return (data || []).map(this.toDomain)
   }
 
+  async listByTenant(tenantId: string): Promise<Message[]> {
+    const { data, error } = await this.supabase
+      .from('messages')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .order('created_at', { ascending: true })
+
+    if (error) throw new Error(error.message)
+    return (data || []).map(this.toDomain)
+  }
+
   async findByWamid(tenantId: string, wamid: string): Promise<Message | null> {
     const { data, error } = await this.supabase
       .from('messages')

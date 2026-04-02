@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/lib/stores/authStore'
+import { getConnectionRepository } from '@/infrastructure/repositories'
 
 export type ConnectionProvider = 'meta' | 'evolution'
 export type ConnectionType = 'whatsapp'
@@ -36,22 +36,7 @@ interface ConnectionsState {
   disconnectProvider: (id: string) => Promise<void>
 }
 
-const mapConnectionFromDb = (row: any): Connection => ({
-  id: row.id,
-  tenantId: row.tenant_id,
-  type: row.type as ConnectionType,
-  provider: row.provider as ConnectionProvider,
-  name: row.name,
-  connected: row.connected,
-  phoneNumberId: row.phone_number_id,
-  wabaId: row.waba_id,
-  instanceName: row.instance_name,
-  instanceId: row.instance_id,
-  evolutionApiKey: row.evolution_api_key,
-  accountName: row.account_name,
-  connectedAt: row.connected_at,
-  lastSync: row.last_sync,
-})
+const connectionRepo = getConnectionRepository()
 
 export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
   connections: [],
@@ -63,14 +48,27 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
 
     set({ isLoading: true })
     try {
-      const { data, error } = await supabase
-        .from('connections')
-        .select('*')
-        .eq('tenant_id', tenantId)
+      const connections = await connectionRepo.findByTenantId(tenantId)
 
-      if (error) throw error
-
-      set({ connections: (data || []).map(mapConnectionFromDb), isLoading: false })
+      set({ 
+        connections: connections.map((row: any) => ({
+          id: row.id,
+          tenantId: row.tenantId,
+          type: 'whatsapp',
+          provider: row.provider as any,
+          name: row.provider === 'evolution' ? 'WhatsApp (Evolution)' : 'Meta WhatsApp',
+          connected: row.status === 'active' || row.status === 'connected',
+          phoneNumberId: row.phoneNumberId,
+          wabaId: row.wabaId,
+          instanceName: row.instanceName,
+          instanceId: row.instanceId,
+          evolutionApiKey: row.evolutionApiKey,
+          accountName: row.instanceName,
+          connectedAt: row.createdAt,
+          lastSync: new Date().toISOString(),
+        })), 
+        isLoading: false 
+      })
     } catch (err) {
       console.error('Erro ao buscar conexões:', err)
       set({ isLoading: false })
@@ -82,19 +80,14 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
     if (!tenantId) return
 
     try {
-      const rowUpdates: any = {}
-      if (updates.name !== undefined) rowUpdates.name = updates.name
-      if (updates.connected !== undefined) rowUpdates.connected = updates.connected
-      if (updates.accountName !== undefined) rowUpdates.account_name = updates.accountName
-      if (updates.instanceName !== undefined) rowUpdates.instance_name = updates.instanceName
-
-      const { error } = await supabase
-        .from('connections')
-        .update(rowUpdates)
-        .eq('id', id)
-        .eq('tenant_id', tenantId)
-
-      if (error) throw error
+      await connectionRepo.update(tenantId, id, {
+        status: updates.connected ? 'active' : 'inactive',
+        instanceName: updates.instanceName,
+        instanceId: updates.instanceId,
+        evolutionApiKey: updates.evolutionApiKey,
+        phoneNumberId: updates.phoneNumberId,
+        wabaId: updates.wabaId,
+      } as any)
 
       set((state) => ({
         connections: state.connections.map((conn) =>

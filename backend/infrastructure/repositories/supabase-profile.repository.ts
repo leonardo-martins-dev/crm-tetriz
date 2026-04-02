@@ -63,6 +63,15 @@ export class SupabaseProfileRepository implements ProfileRepository {
     return this.toDomain(data)
   }
 
+  async delete(id: string): Promise<void> {
+    const { error } = await this.supabase
+      .from('profiles')
+      .delete()
+      .eq('id', id)
+
+    if (error) throw new Error(error.message)
+  }
+
   private toDomain(row: any): Profile {
     return {
       id: row.id,

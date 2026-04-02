@@ -1,75 +1,94 @@
 import { create } from 'zustand'
 import { Automation } from '@/types'
-
-const mockAutomations: Automation[] = [
-  {
-    id: 'auto-1',
-    name: 'Boas-vindas para novos leads',
-    event: 'lead_created',
-    action: 'send_message',
-    active: true,
-  },
-  {
-    id: 'auto-2',
-    name: 'Notificar mudança de etapa',
-    event: 'pipeline_stage_changed',
-    action: 'notify_team',
-    active: true,
-  },
-  {
-    id: 'auto-3',
-    name: 'Alerta após 24h sem resposta',
-    event: '24h_no_response',
-    condition: 'window_closed',
-    action: 'alert_assigned_user',
-    active: true,
-  },
-  {
-    id: 'auto-4',
-    name: 'Follow-up automático',
-    event: 'lead_qualified',
-    action: 'schedule_followup',
-    active: false,
-  },
-]
+import { useAuthStore } from './authStore'
+import { getAutomationRepository } from '@/infrastructure/repositories'
 
 interface AutomationsState {
   automations: Automation[]
-  toggleAutomation: (id: string) => void
-  addAutomation: (automation: Automation) => void
-  updateAutomation: (id: string, updates: Partial<Automation>) => void
-  deleteAutomation: (id: string) => void
+  isLoading: boolean
+  fetchAutomations: () => Promise<void>
+  toggleAutomation: (id: string) => Promise<void>
+  addAutomation: (automation: Omit<Automation, 'id'>) => Promise<void>
+  updateAutomation: (id: string, updates: Partial<Automation>) => Promise<void>
+  deleteAutomation: (id: string) => Promise<void>
 }
 
-export const useAutomationsStore = create<AutomationsState>((set) => ({
-  automations: mockAutomations,
+const automationRepo = getAutomationRepository()
 
-  toggleAutomation: (id: string) => {
-    set((state) => ({
-      automations: state.automations.map((auto) =>
-        auto.id === id ? { ...auto, active: !auto.active } : auto
-      ),
-    }))
+export const useAutomationsStore = create<AutomationsState>((set, get) => ({
+  automations: [],
+  isLoading: false,
+
+  fetchAutomations: async () => {
+    const tenantId = useAuthStore.getState().user?.tenantId
+    if (!tenantId) return
+
+    set({ isLoading: true })
+    try {
+      const data = await automationRepo.findByTenantId(tenantId)
+
+      set({ 
+        automations: data.map(row => ({
+          id: row.id,
+          tenantId: row.tenantId,
+          name: row.name,
+          event: row.event,
+          condition: row.condition,
+          action: row.action,
+          active: row.active,
+        })), 
+        isLoading: false 
+      })
+    } catch (error) {
+      console.error('Erro ao buscar automações:', error)
+      set({ isLoading: false })
+    }
   },
 
-  addAutomation: (automation: Automation) => {
-    set((state) => ({
-      automations: [...state.automations, automation],
-    }))
+  toggleAutomation: async (id: string) => {
+    const auto = get().automations.find(a => a.id === id)
+    if (!auto) return
+    await get().updateAutomation(id, { active: !auto.active })
   },
 
-  updateAutomation: (id: string, updates: Partial<Automation>) => {
-    set((state) => ({
-      automations: state.automations.map((auto) =>
-        auto.id === id ? { ...auto, ...updates } : auto
-      ),
-    }))
+  addAutomation: async (automationData) => {
+    const tenantId = useAuthStore.getState().user?.tenantId
+    if (!tenantId) return
+
+    try {
+      await automationRepo.create({
+        ...automationData,
+        tenantId,
+      })
+
+      await get().fetchAutomations()
+    } catch (error) {
+      console.error('Erro ao adicionar automação:', error)
+    }
   },
 
-  deleteAutomation: (id: string) => {
-    set((state) => ({
-      automations: state.automations.filter((auto) => auto.id !== id),
-    }))
+  updateAutomation: async (id, updates) => {
+    const tenantId = useAuthStore.getState().user?.tenantId
+    if (!tenantId) return
+
+    try {
+      await automationRepo.update(tenantId, id, updates)
+      await get().fetchAutomations()
+    } catch (error) {
+      console.error('Erro ao atualizar automação:', error)
+    }
+  },
+
+  deleteAutomation: async (id) => {
+    const tenantId = useAuthStore.getState().user?.tenantId
+    if (!tenantId) return
+
+    try {
+      await automationRepo.delete(tenantId, id)
+      await get().fetchAutomations()
+    } catch (error) {
+      console.error('Erro ao deletar automação:', error)
+    }
   },
 }))
 

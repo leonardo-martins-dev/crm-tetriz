@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { Client, ClientPlan } from '@/types'
+import { getTenantRepository } from '@/infrastructure/repositories'
 
 export const AVAILABLE_MODULES = [
   { id: 'inbox', label: 'Inbox' },
@@ -12,85 +13,90 @@ export const AVAILABLE_MODULES = [
 
 interface ClientsState {
   clients: Client[]
-  addClient: (client: Omit<Client, 'id' | 'createdAt' | 'userCount' | 'leadCount'>) => void
-  updateClient: (id: string, updates: Partial<Client>) => void
-  toggleClientActive: (id: string) => void
-  deleteClient: (id: string) => void
+  isLoading: boolean
+  fetchClients: () => Promise<void>
+  addClient: (client: Omit<Client, 'id' | 'createdAt' | 'userCount' | 'leadCount'>) => Promise<void>
+  updateClient: (id: string, updates: Partial<Client>) => Promise<void>
+  toggleClientActive: (id: string) => Promise<void>
+  deleteClient: (id: string) => Promise<void>
 }
 
-// Mock clients data inicial
-const initialClients: Client[] = [
-  {
-    id: 'client-1',
-    name: 'Tech Solutions',
-    active: true,
-    plan: 'enterprise',
-    modules: ['inbox', 'pipeline', 'agents', 'automations', 'broadcast', 'metrics'],
-    maxUsers: 15,
-    createdAt: '2024-01-15',
-    userCount: 5,
-    leadCount: 127,
-  },
-  {
-    id: 'client-2',
-    name: 'Digital Agency',
-    active: true,
-    plan: 'professional',
-    modules: ['inbox', 'pipeline', 'automations', 'metrics'],
-    maxUsers: 8,
-    createdAt: '2024-02-20',
-    userCount: 3,
-    leadCount: 89,
-  },
-  {
-    id: 'client-3',
-    name: 'E-commerce Plus',
-    active: true,
-    plan: 'basic',
-    modules: ['inbox', 'pipeline', 'metrics'],
-    maxUsers: 3,
-    createdAt: '2024-03-10',
-    userCount: 8,
-    leadCount: 203,
-  },
-]
+const tenantRepo = getTenantRepository()
 
-export const useClientsStore = create<ClientsState>((set) => ({
-  clients: initialClients,
+export const useClientsStore = create<ClientsState>((set, get) => ({
+  clients: [],
+  isLoading: false,
 
-  addClient: (clientData) => {
-    const newClient: Client = {
-      id: `client-${Date.now()}`,
-      ...clientData,
-      createdAt: new Date().toISOString().split('T')[0],
-      userCount: 0,
-      leadCount: 0,
+  fetchClients: async () => {
+    set({ isLoading: true })
+    try {
+      const tenants = await tenantRepo.listAll()
+
+      const mappedClients: Client[] = tenants.map(row => ({
+        id: row.id,
+        name: row.name,
+        active: row.active,
+        plan: row.plan as ClientPlan,
+        modules: row.modules as string[] || [],
+        maxUsers: row.maxUsers,
+        createdAt: row.createdAt,
+        userCount: 0,
+        leadCount: 0,
+      }))
+
+      set({ clients: mappedClients, isLoading: false })
+    } catch (error) {
+      console.error('Erro ao buscar clientes:', error)
+      set({ isLoading: false })
     }
-    set((state) => ({
-      clients: [...state.clients, newClient],
-    }))
   },
 
-  updateClient: (id, updates) => {
-    set((state) => ({
-      clients: state.clients.map((client) =>
-        client.id === id ? { ...client, ...updates } : client
-      ),
-    }))
+  addClient: async (clientData) => {
+    try {
+      await tenantRepo.create({
+        name: clientData.name,
+        active: clientData.active,
+        plan: clientData.plan,
+        modules: clientData.modules as string[],
+        maxUsers: clientData.maxUsers,
+      })
+      await get().fetchClients()
+    } catch (error) {
+      console.error('Erro ao adicionar cliente:', error)
+    }
   },
 
-  toggleClientActive: (id) => {
-    set((state) => ({
-      clients: state.clients.map((client) =>
-        client.id === id ? { ...client, active: !client.active } : client
-      ),
-    }))
+  updateClient: async (id, updates) => {
+    try {
+      await tenantRepo.update(id, {
+        name: updates.name,
+        active: updates.active,
+        plan: updates.plan,
+        modules: updates.modules as string[],
+        maxUsers: updates.maxUsers,
+      })
+      await get().fetchClients()
+    } catch (error) {
+      console.error('Erro ao atualizar cliente:', error)
+    }
   },
 
-  deleteClient: (id) => {
-    set((state) => ({
-      clients: state.clients.filter((client) => client.id !== id),
-    }))
+  toggleClientActive: async (id) => {
+    try {
+      await tenantRepo.toggleActive(id)
+      await get().fetchClients()
+    } catch (error) {
+      console.error('Erro ao alternar status do cliente:', error)
+    }
+  },
+
+  deleteClient: async (id) => {
+    try {
+      await tenantRepo.delete(id)
+      await get().fetchClients()
+    } catch (error) {
+      console.error('Erro ao deletar cliente:', error)
+    }
   },
 }))
 

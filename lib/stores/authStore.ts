@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { User, Client, UserRole } from '@/types'
 import { supabase } from '@/lib/supabase'
+import { getProfileRepository } from '@/infrastructure/repositories'
 
 interface AuthState {
   user: User | null
@@ -13,6 +14,8 @@ interface AuthState {
   setUser: (user: User | null) => void
   setClient: (client: Client | null) => void
 }
+
+const profileRepo = getProfileRepository()
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
@@ -31,22 +34,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (authError) throw authError
 
       if (authData.user) {
-        // Buscar perfil do usuário na tabela profiles
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', authData.user.id)
-          .single()
+        // Buscar perfil do usuário no repositório de perfis
+        const profile = await profileRepo.findById(authData.user.id)
 
-        if (profileError) throw profileError
+        if (!profile) throw new Error('Perfil do usuário não encontrado')
 
         const user: User = {
           id: profile.id,
           name: profile.name,
           email: profile.email,
           role: profile.role as UserRole,
-          avatar: profile.avatar_url,
-          tenantId: profile.tenant_id,
+          avatar: profile.avatarUrl,
+          tenantId: profile.tenantId,
           active: profile.active,
         }
 
@@ -73,23 +72,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const { data: { session } } = await supabase.auth.getSession()
     
     if (session?.user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single()
+      try {
+        const profile = await profileRepo.findById(session.user.id)
 
-      if (profile) {
-        const user: User = {
-          id: profile.id,
-          name: profile.name,
-          email: profile.email,
-          role: profile.role as UserRole,
-          avatar: profile.avatar_url,
-          tenantId: profile.tenant_id,
-          active: profile.active,
+        if (profile) {
+          const user: User = {
+            id: profile.id,
+            name: profile.name,
+            email: profile.email,
+            role: profile.role as UserRole,
+            avatar: profile.avatarUrl,
+            tenantId: profile.tenantId,
+            active: profile.active,
+          }
+          set({ user, isAuthenticated: true })
         }
-        set({ user, isAuthenticated: true })
+      } catch (err) {
+        console.error('Erro ao recarregar usuário:', err)
       }
     } else {
       set({ user: null, isAuthenticated: false })

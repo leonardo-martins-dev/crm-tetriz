@@ -126,6 +126,8 @@ export class SupabaseLeadRepository implements LeadRepository {
       product: row.product,
       window24hOpen: row.window_24h_open,
       window24hExpiresAt: row.window_24h_expires_at,
+      tags: row.tags || [],
+      notes: row.notes || [],
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       lastContactAt: row.last_contact_at,
@@ -149,6 +151,8 @@ export class SupabaseLeadRepository implements LeadRepository {
     if (entity.window24hOpen !== undefined) row.window_24h_open = entity.window24hOpen
     if (entity.window24hExpiresAt !== undefined) row.window_24h_expires_at = entity.window24hExpiresAt
     if (entity.lastContactAt !== undefined) row.last_contact_at = entity.lastContactAt
+    if (entity.tags !== undefined) row.tags = entity.tags
+    if (entity.notes !== undefined) row.notes = entity.notes
     return row
   }
 }

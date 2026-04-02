@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/lib/stores/authStore'
+import { getAgentRepository } from '@/infrastructure/repositories'
 
 export type TriggerType = 'tag' | 'pipeline_stage'
 
@@ -38,6 +38,8 @@ interface AgentsState {
   toggleAgentActive: (agentId: string) => Promise<void>
 }
 
+const agentRepo = getAgentRepository()
+
 export const useAgentsStore = create<AgentsState>((set, get) => ({
   agents: [],
   isLoading: false,
@@ -48,26 +50,20 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
 
     set({ isLoading: true })
     try {
-      const { data, error } = await supabase
-        .from('agents')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .order('name', { ascending: true })
-
-      if (error) throw error
+      const agents = await agentRepo.findByTenantId(tenantId)
 
       set({ 
-        agents: (data || []).map(row => ({
+        agents: agents.map(row => ({
           id: row.id,
-          tenantId: row.tenant_id,
+          tenantId: row.tenantId,
           name: row.name,
           prompt: row.prompt,
-          triggers: row.triggers || [],
-          permissions: row.permissions || { canAssignTags: false, canMovePipeline: false },
+          triggers: row.triggers as any || [],
+          permissions: row.permissions as any || { canAssignTags: false, canMovePipeline: false },
           model: row.model,
-          apiKey: row.api_key_encrypted, // Note: Encrypted on backend
+          apiKey: row.apiKeyEncrypted,
           active: row.active,
-          createdAt: row.created_at,
+          createdAt: row.createdAt,
         })), 
         isLoading: false 
       })
@@ -82,34 +78,28 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
     if (!tenantId) return
 
     try {
-      const { data, error } = await supabase
-        .from('agents')
-        .insert({
-          tenant_id: tenantId,
-          name: agentData.name,
-          prompt: agentData.prompt,
-          triggers: agentData.triggers,
-          permissions: agentData.permissions,
-          model: agentData.model,
-          api_key_encrypted: agentData.apiKey,
-          active: agentData.active,
-        })
-        .select()
-        .single()
-
-      if (error) throw error
+      const data = await agentRepo.create({
+        tenantId,
+        name: agentData.name,
+        prompt: agentData.prompt,
+        triggers: agentData.triggers as any,
+        permissions: agentData.permissions as any,
+        model: agentData.model,
+        apiKeyEncrypted: agentData.apiKey,
+        active: agentData.active,
+      })
 
       const newAgent: Agent = {
         id: data.id,
-        tenantId: data.tenant_id,
+        tenantId: data.tenantId,
         name: data.name,
         prompt: data.prompt,
-        triggers: data.triggers,
-        permissions: data.permissions,
+        triggers: data.triggers as any,
+        permissions: data.permissions as any,
         model: data.model,
-        apiKey: data.api_key_encrypted,
+        apiKey: data.apiKeyEncrypted,
         active: data.active,
-        createdAt: data.created_at,
+        createdAt: data.createdAt,
       }
 
       set((state) => ({ agents: [...state.agents, newAgent] }))
@@ -119,22 +109,19 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
   },
 
   updateAgent: async (agentId, updates) => {
+    const tenantId = useAuthStore.getState().user?.tenantId
+    if (!tenantId) return
+
     try {
-      const rowUpdates: any = {}
-      if (updates.name !== undefined) rowUpdates.name = updates.name
-      if (updates.prompt !== undefined) rowUpdates.prompt = updates.prompt
-      if (updates.triggers !== undefined) rowUpdates.triggers = updates.triggers
-      if (updates.permissions !== undefined) rowUpdates.permissions = updates.permissions
-      if (updates.model !== undefined) rowUpdates.model = updates.model
-      if (updates.apiKey !== undefined) rowUpdates.api_key_encrypted = updates.apiKey
-      if (updates.active !== undefined) rowUpdates.active = updates.active
-
-      const { error } = await supabase
-        .from('agents')
-        .update(rowUpdates)
-        .eq('id', agentId)
-
-      if (error) throw error
+      await agentRepo.update(tenantId, agentId, {
+        name: updates.name,
+        prompt: updates.prompt,
+        triggers: updates.triggers as any,
+        permissions: updates.permissions as any,
+        model: updates.model,
+        apiKeyEncrypted: updates.apiKey,
+        active: updates.active
+      })
 
       set((state) => ({
         agents: state.agents.map((agent) =>
@@ -147,13 +134,11 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
   },
 
   deleteAgent: async (agentId) => {
-    try {
-      const { error } = await supabase
-        .from('agents')
-        .delete()
-        .eq('id', agentId)
+    const tenantId = useAuthStore.getState().user?.tenantId
+    if (!tenantId) return
 
-      if (error) throw error
+    try {
+      await agentRepo.delete(tenantId, agentId)
 
       set((state) => ({
         agents: state.agents.filter((agent) => agent.id !== agentId),

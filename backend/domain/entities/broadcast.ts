@@ -5,10 +5,9 @@ export interface Broadcast {
   tenantId: string
   name: string
   message: string
-  targetTags?: string[]
-  targetStatus?: string
-  targetPipelineStage?: string
-  status: BroadcastStatus
+  channel: string
+  tags: string[]
+  broadcastStatus: 'scheduled' | 'sending' | 'sent' | 'failed' | any
   totalRecipients: number
   sentCount: number
   failedCount: number
