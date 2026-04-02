@@ -9,8 +9,7 @@ export class SupabaseBroadcastRepository implements BroadcastRepository {
     const { data, error } = await this.supabase
       .from('broadcasts')
       .select('*')
-      .eq('tenant_id', tenantId)
-      .eq('id', id)
+      .match({ tenant_id: tenantId, id })
       .maybeSingle()
 
     if (error || !data) return null
@@ -63,8 +62,7 @@ export class SupabaseBroadcastRepository implements BroadcastRepository {
         sent_at: input.sentAt,
         scheduled_at: input.scheduledAt,
       })
-      .eq('tenant_id', tenantId)
-      .eq('id', id)
+      .match({ tenant_id: tenantId, id })
       .select()
       .single()
 
@@ -76,8 +74,7 @@ export class SupabaseBroadcastRepository implements BroadcastRepository {
     const { error } = await this.supabase
       .from('broadcasts')
       .delete()
-      .eq('tenant_id', tenantId)
-      .eq('id', id)
+      .match({ tenant_id: tenantId, id })
 
     if (error) throw new Error(error.message)
   }

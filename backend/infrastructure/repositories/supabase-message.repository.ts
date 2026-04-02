@@ -9,8 +9,7 @@ export class SupabaseMessageRepository implements MessageRepository {
     const { data, error } = await this.supabase
       .from('messages')
       .select('*')
-      .eq('tenant_id', tenantId)
-      .eq('conversation_id', conversationId)
+      .match({ tenant_id: tenantId, conversation_id: conversationId })
       .order('created_at', { ascending: true })
 
     if (error) throw new Error(error.message)
@@ -32,8 +31,7 @@ export class SupabaseMessageRepository implements MessageRepository {
     const { data, error } = await this.supabase
       .from('messages')
       .select('*')
-      .eq('tenant_id', tenantId)
-      .eq('wamid', wamid)
+      .match({ tenant_id: tenantId, wamid })
       .maybeSingle()
 
     if (error) throw new Error(error.message)
@@ -75,8 +73,7 @@ export class SupabaseMessageRepository implements MessageRepository {
         media_url: input.mediaUrl,
         media_type: input.mediaType,
       })
-      .eq('tenant_id', tenantId)
-      .eq('id', id)
+      .match({ tenant_id: tenantId, id })
       .select()
       .single()
 
@@ -88,8 +85,7 @@ export class SupabaseMessageRepository implements MessageRepository {
     const { error } = await this.supabase
       .from('messages')
       .update({ read: true, status: 'read' })
-      .eq('tenant_id', tenantId)
-      .eq('conversation_id', conversationId)
+      .match({ tenant_id: tenantId, conversation_id: conversationId })
       .neq('status', 'read')
 
     if (error) throw new Error(error.message)

@@ -14,8 +14,7 @@ export class SupabaseLeadRepository implements LeadRepository {
     const { data, error } = await this.supabase
       .from('leads')
       .select('*')
-      .eq('id', id)
-      .eq('tenant_id', tenantId)
+      .match({ id, tenant_id: tenantId })
       .single()
 
     if (error || !data) return null
@@ -26,8 +25,7 @@ export class SupabaseLeadRepository implements LeadRepository {
     const { data, error } = await this.supabase
       .from('leads')
       .select('*')
-      .eq('tenant_id', tenantId)
-      .eq('phone', phone)
+      .match({ tenant_id: tenantId, phone })
       .single()
 
     if (error || !data) return null
@@ -77,8 +75,7 @@ export class SupabaseLeadRepository implements LeadRepository {
     const { data, error } = await this.supabase
       .from('leads')
       .update(this.toRow(updates))
-      .eq('id', id)
-      .eq('tenant_id', tenantId)
+      .match({ id, tenant_id: tenantId })
       .select()
       .single()
 
@@ -91,8 +88,7 @@ export class SupabaseLeadRepository implements LeadRepository {
     const { error } = await this.supabase
       .from('leads')
       .delete()
-      .eq('id', id)
-      .eq('tenant_id', tenantId)
+      .match({ id, tenant_id: tenantId })
 
     if (error) throw new Error(error.message)
   }

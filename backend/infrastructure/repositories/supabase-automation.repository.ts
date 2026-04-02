@@ -9,8 +9,7 @@ export class SupabaseAutomationRepository implements AutomationRepository {
     const { data, error } = await this.supabase
       .from('automations')
       .select('*')
-      .eq('tenant_id', tenantId)
-      .eq('id', id)
+      .match({ tenant_id: tenantId, id })
       .maybeSingle()
 
     if (error || !data) return null
@@ -58,8 +57,7 @@ export class SupabaseAutomationRepository implements AutomationRepository {
         action: input.action,
         nodes: input.nodes,
       })
-      .eq('tenant_id', tenantId)
-      .eq('id', id)
+      .match({ tenant_id: tenantId, id })
       .select()
       .single()
 
@@ -71,8 +69,7 @@ export class SupabaseAutomationRepository implements AutomationRepository {
     const { error } = await this.supabase
       .from('automations')
       .delete()
-      .eq('tenant_id', tenantId)
-      .eq('id', id)
+      .match({ tenant_id: tenantId, id })
 
     if (error) throw new Error(error.message)
   }

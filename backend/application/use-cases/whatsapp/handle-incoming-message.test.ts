@@ -47,11 +47,13 @@ describe('handleIncomingMessage', () => {
     vi.clearAllMocks()
     mockConnectionRepository.findByInstanceName.mockResolvedValue(mockConnection)
     mockLeadRepository.findByPhone.mockResolvedValue(null)
-    mockLeadRepository.create.mockResolvedValue({ id: 'lead-1', name: 'João Silva', phone: '5511999999999' })
+    mockLeadRepository.create.mockResolvedValue({ id: 'lead-1', name: 'João Silva', phone: '5511999999999', tenantId: 'tenant-123' })
     mockConversationRepository.findByLeadId.mockResolvedValue(null)
-    mockConversationRepository.create.mockResolvedValue({ id: 'conv-1' })
+    mockConversationRepository.create.mockResolvedValue({ id: 'conv-1', tenantId: 'tenant-123' })
+    mockConversationRepository.update.mockResolvedValue({ id: 'conv-1', tenantId: 'tenant-123' })
     mockAgentRepository.findActiveByTrigger.mockResolvedValue([])
     mockMessageRepository.findByConversationId.mockResolvedValue([])
+    mockMessageRepository.create.mockResolvedValue({ id: 'msg-rec-1' })
   })
 
   it('deve criar um novo lead se ele não existir', async () => {
@@ -64,7 +66,7 @@ describe('handleIncomingMessage', () => {
   })
 
   it('deve atualizar a janela de 24h de um lead existente', async () => {
-    mockLeadRepository.findByPhone.mockResolvedValue({ id: 'lead-1', phone: '5511999999999' })
+    mockLeadRepository.findByPhone.mockResolvedValue({ id: 'lead-1', phone: '5511999999999', tenantId: 'tenant-123' })
 
     await handleIncomingMessage(payload, mockDeps)
 
@@ -81,7 +83,8 @@ describe('handleIncomingMessage', () => {
     expect(mockMessageRepository.create).toHaveBeenCalledWith(expect.objectContaining({
       content: payload.text,
       senderType: MessageSenderType.LEAD,
-      wamid: payload.messageId
+      wamid: payload.messageId,
+      tenantId: mockConnection.tenantId
     }))
   })
 
@@ -107,12 +110,12 @@ describe('handleIncomingMessage', () => {
     expect(mockAiOrchestrator.generateResponse).toHaveBeenCalled()
     expect(mockEvolutionService.sendTextMessage).toHaveBeenCalled()
     
-    // Verifica se salvou tanto a mensagem do lead quanto a da IA
+    // Verifica se salvou tanto a mensagem do lead quanto a da IA com o tenantId correto
     expect(mockMessageRepository.create).toHaveBeenCalledWith(
-      expect.objectContaining({ senderType: MessageSenderType.LEAD })
+      expect.objectContaining({ senderType: MessageSenderType.LEAD, tenantId: mockConnection.tenantId })
     )
     expect(mockMessageRepository.create).toHaveBeenCalledWith(
-      expect.objectContaining({ senderType: MessageSenderType.AI })
+      expect.objectContaining({ senderType: MessageSenderType.AI, tenantId: mockConnection.tenantId })
     )
   })
 
@@ -129,10 +132,13 @@ describe('handleIncomingMessage', () => {
 
     await handleIncomingMessage(mediaPayload, mockDeps)
 
-    expect(mockStorageService.uploadFile).toHaveBeenCalled()
+    expect(mockStorageService.uploadFile).toHaveBeenCalledWith(expect.objectContaining({
+        path: expect.stringContaining(mockConnection.tenantId)
+    }))
     expect(mockMessageRepository.create).toHaveBeenCalledWith(expect.objectContaining({
       mediaUrl: 'https://storage.com/media.jpg',
-      mediaType: 'image'
+      mediaType: 'image',
+      tenantId: mockConnection.tenantId
     }))
   })
 })

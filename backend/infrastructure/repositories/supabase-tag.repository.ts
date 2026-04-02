@@ -31,8 +31,7 @@ export class SupabaseTagRepository implements TagRepository {
     const { data, error } = await this.supabase
       .from('tags')
       .select('*')
-      .eq('tenant_id', tenantId)
-      .eq('name', name)
+      .match({ tenant_id: tenantId, name })
       .maybeSingle()
 
     if (error || !data) return null
@@ -61,8 +60,7 @@ export class SupabaseTagRepository implements TagRepository {
         name: input.name,
         color: input.color,
       })
-      .eq('tenant_id', tenantId)
-      .eq('id', id)
+      .match({ tenant_id: tenantId, id })
       .select()
       .single()
 
@@ -74,8 +72,7 @@ export class SupabaseTagRepository implements TagRepository {
     const { error } = await this.supabase
       .from('tags')
       .delete()
-      .eq('tenant_id', tenantId)
-      .eq('id', id)
+      .match({ tenant_id: tenantId, id })
 
     if (error) throw new Error(error.message)
   }

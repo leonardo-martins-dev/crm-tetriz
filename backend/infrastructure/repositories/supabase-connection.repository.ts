@@ -14,8 +14,7 @@ export class SupabaseConnectionRepository implements ConnectionRepository {
     const { data, error } = await this.supabase
       .from('connections')
       .select('*')
-      .eq('id', id)
-      .eq('tenant_id', tenantId)
+      .match({ id, tenant_id: tenantId })
       .single()
 
     if (error || !data) return null
@@ -69,8 +68,7 @@ export class SupabaseConnectionRepository implements ConnectionRepository {
     const { data, error } = await this.supabase
       .from('connections')
       .update(this.toRow(updates))
-      .eq('id', id)
-      .eq('tenant_id', tenantId)
+      .match({ id, tenant_id: tenantId })
       .select()
       .single()
 
@@ -83,8 +81,7 @@ export class SupabaseConnectionRepository implements ConnectionRepository {
     const { error } = await this.supabase
       .from('connections')
       .delete()
-      .eq('id', id)
-      .eq('tenant_id', tenantId)
+      .match({ id, tenant_id: tenantId })
 
     if (error) throw new Error(error.message)
   }

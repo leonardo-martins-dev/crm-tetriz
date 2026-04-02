@@ -19,6 +19,7 @@ interface LeadsState {
   updatePipelineStage: (leadId: string, stageId: string) => Promise<void>
   addTag: (leadId: string, tag: string) => Promise<void>
   removeTag: (leadId: string, tag: string) => Promise<void>
+  deleteLead: (leadId: string) => Promise<void>
   getLeadsByStage: (stageName: string) => Lead[]
 }
 
@@ -159,6 +160,22 @@ export const useLeadsStore = create<LeadsState>((set, get) => {
 
       const updatedTags = lead.tags.filter(t => t !== tag)
       await get().updateLead(leadId, { tags: updatedTags })
+    },
+
+    deleteLead: async (leadId: string) => {
+      const tenantId = useAuthStore.getState().user?.tenantId
+      if (!tenantId) return
+
+      try {
+        await leadRepo.delete(tenantId, leadId)
+        set((state) => ({
+          leads: state.leads.filter((l) => l.id !== leadId),
+          selectedLeadId: state.selectedLeadId === leadId ? null : state.selectedLeadId,
+          selectedLead: state.selectedLeadId === leadId ? null : state.selectedLead,
+        }))
+      } catch (err) {
+        console.error('Erro ao deletar lead:', err)
+      }
     },
 
     getLeadsByStage: (stageName: string) => {

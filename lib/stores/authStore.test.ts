@@ -1,20 +1,31 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { useAuthStore } from './authStore'
-import { supabase } from '../supabase'
 
-vi.mock('../supabase', () => ({
-  supabase: {
-    auth: {
-      signInWithPassword: vi.fn(),
-      signOut: vi.fn(),
-      getSession: vi.fn(),
-    },
-    from: vi.fn().mockReturnThis(),
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    single: vi.fn(),
-  },
+// Mock do repository hoisted
+const mockProfileRepository = vi.hoisted(() => ({
+  findById: vi.fn(),
+  update: vi.fn(),
+  delete: vi.fn(),
 }))
+
+vi.mock('@/infrastructure/repositories', () => ({
+  getProfileRepository: () => mockProfileRepository
+}))
+
+// Mock do supabase hoisted
+const mockSupabase = vi.hoisted(() => ({
+  auth: {
+    signInWithPassword: vi.fn(),
+    signOut: vi.fn(),
+    getSession: vi.fn(),
+  }
+}))
+
+vi.mock('@/lib/supabase', () => ({
+  supabase: mockSupabase
+}))
+
+import { useAuthStore } from './authStore'
+import { supabase } from '@/lib/supabase'
 
 describe('authStore', () => {
   beforeEach(() => {
@@ -22,45 +33,49 @@ describe('authStore', () => {
     useAuthStore.setState({ user: null, isAuthenticated: false, isLoading: false })
   })
 
-  it('deve realizar login com sucesso e carregar o perfil', async () => {
-    const mockAuthData = { user: { id: 'user-123' }, session: { access_token: 'token' } }
-    const mockProfileData = { id: 'user-123', name: 'Admin', tenant_id: 'tenant-1' }
+  it('should login and fetch profile via repository', async () => {
+    const mockAuthUser = { user: { id: 'u1', email: 'test@test.com' } }
+    const mockProfile = { id: 'u1', name: 'Test User', email: 'test@test.com', role: 'admin', tenantId: 't1', active: true }
 
-    ;(supabase.auth.signInWithPassword as any).mockResolvedValue({ data: mockAuthData, error: null })
-    ;(supabase.from as any)().select().eq().single.mockResolvedValue({ data: mockProfileData, error: null })
+    vi.mocked(supabase.auth.signInWithPassword).mockResolvedValue({ data: mockAuthUser, error: null } as any)
+    mockProfileRepository.findById.mockResolvedValue(mockProfile)
 
-    await useAuthStore.getState().login('test@test.com', 'password')
+    const result = await useAuthStore.getState().login('test@test.com', 'pass123')
 
-    const state = useAuthStore.getState()
-    expect(state.isAuthenticated).toBe(true)
-    expect(state.user?.name).toBe('Admin')
-    expect(state.user?.tenantId).toBe('tenant-1')
+    expect(result.user?.name).toBe('Test User')
+    expect(useAuthStore.getState().isAuthenticated).toBe(true)
+    expect(mockProfileRepository.findById).toHaveBeenCalledWith('u1')
   })
 
-  it('deve capturar erro se o login falhar', async () => {
-    ;(supabase.auth.signInWithPassword as any).mockResolvedValue({ 
-      data: { user: null, session: null }, 
-      error: { message: 'Dados inválidos' } 
-    })
+  it('should handle login error', async () => {
+    vi.mocked(supabase.auth.signInWithPassword).mockResolvedValue({ error: { message: 'Invalid credentials' } } as any)
 
-    const { error } = await useAuthStore.getState().login('wrong@test.com', 'wrong')
+    const result = await useAuthStore.getState().login('test@test.com', 'wrong')
 
-    const state = useAuthStore.getState()
-    expect(state.isAuthenticated).toBe(false)
-    expect(error).toBe('Dados inválidos')
+    expect(result.error).toBe('Invalid credentials')
+    expect(useAuthStore.getState().isAuthenticated).toBe(false)
   })
 
-  it('deve limpar o estado no logout', async () => {
-    useAuthStore.setState({ 
-      isAuthenticated: true, 
-      user: { id: '1', name: 'X', role: 'user', tenantId: 'T1', email: 'x@x.com', active: true } 
-    })
-    ;(supabase.auth.signOut as any).mockResolvedValue({ error: null })
+  it('should refresh session and profile', async () => {
+    const mockSession = { session: { user: { id: 'u1' } } }
+    const mockProfile = { id: 'u1', name: 'Refreshed User', email: 'test@test.com', role: 'user', tenantId: 't1', active: true }
+
+    vi.mocked(supabase.auth.getSession).mockResolvedValue({ data: mockSession, error: null } as any)
+    mockProfileRepository.findById.mockResolvedValue(mockProfile)
+
+    await useAuthStore.getState().refreshUser()
+
+    expect(useAuthStore.getState().user?.name).toBe('Refreshed User')
+    expect(useAuthStore.getState().isAuthenticated).toBe(true)
+  })
+
+  it('should logout correctly', async () => {
+    useAuthStore.setState({ isAuthenticated: true, user: { id: 'u1' } as any })
+    vi.mocked(supabase.auth.signOut).mockResolvedValue({ error: null } as any)
 
     await useAuthStore.getState().logout()
 
-    const state = useAuthStore.getState()
-    expect(state.isAuthenticated).toBe(false)
-    expect(state.user).toBe(null)
+    expect(useAuthStore.getState().isAuthenticated).toBe(false)
+    expect(useAuthStore.getState().user).toBeNull()
   })
 })

@@ -1,88 +1,68 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { SupabaseLeadRepository } from './supabase-lead.repository'
+import { createMockSupabase } from '../../../tests/mocks'
 
 describe('SupabaseLeadRepository', () => {
+  let repository: SupabaseLeadRepository
   let mockSupabase: any
 
   beforeEach(() => {
-    vi.clearAllMocks()
-    
-    // Mock robusto para suportar encadeamento e await direto (thenable)
-    const mockQuery: any = {
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      or: vi.fn().mockReturnThis(),
-      insert: vi.fn().mockReturnThis(),
-      update: vi.fn().mockReturnThis(),
-      delete: vi.fn().mockReturnThis(),
-    }
-
-    mockSupabase = {
-      from: vi.fn().mockReturnValue(mockQuery),
-    }
-
-    // Função auxiliar para configurar o resultado final da query
-    mockSupabase.resolveWith = (data: any, error: any = null) => {
-      mockQuery.then = vi.fn((onFullfilled: any) => {
-        return Promise.resolve(onFullfilled({ data, error }))
-      })
-      mockQuery.single = vi.fn().mockResolvedValue({ data, error })
-    }
+    mockSupabase = createMockSupabase()
+    repository = new SupabaseLeadRepository(mockSupabase as any)
   })
 
-  it('findById deve construir a query correta', async () => {
-    const repository = new SupabaseLeadRepository(mockSupabase)
-    mockSupabase.resolveWith({ id: '1', name: 'Test' })
+  it('should find a lead by id', async () => {
+    const mockLead = { id: '1', name: 'Test Lead', tenant_id: 't1' }
+    mockSupabase.from().select().match().single.mockResolvedValue({ data: mockLead, error: null })
 
-    const result = await repository.findById('tenant-123', '1')
+    const result = await repository.findById('t1', '1')
 
-    expect(mockSupabase.from).toHaveBeenCalledWith('leads')
-    expect(result?.name).toBe('Test')
+    expect(result?.name).toBe('Test Lead')
+    expect(mockSupabase.from().select().match).toHaveBeenCalledWith({ id: '1', tenant_id: 't1' })
   })
 
-  it('list deve aplicar filtros corretamente', async () => {
-    const repository = new SupabaseLeadRepository(mockSupabase)
-    mockSupabase.resolveWith([])
-
-    await repository.list('tenant-123', { status: 'new', search: 'John' })
-
-    expect(mockSupabase.from).toHaveBeenCalledWith('leads')
-    // O mockQuery.eq já foi chamado via proxy do mockReturnThis
-  })
-
-  it('create deve mapear campos domain para row corretamente', async () => {
-    const repository = new SupabaseLeadRepository(mockSupabase)
-    const mockData = { id: 'new-id', name: 'John', tenant_id: 'tenant-123' }
-    mockSupabase.resolveWith(mockData)
-
-    const input = {
-      tenantId: 'tenant-123',
-      name: 'John',
-      phone: '123',
-      channel: 'whatsapp' as const,
-      status: 'new' as const,
-      pipelineStage: 'Novo',
-      score: 0,
-      priority: 'medium' as const,
-      window24hOpen: true,
+  it('should create a lead', async () => {
+    const leadInput = {
+      tenantId: 't1',
+      name: 'Jane Doe',
+      status: 'new' as any,
+      channel: 'whatsapp' as any,
+      priority: 'high' as any,
+      score: 10,
+      tags: [],
+      notes: [],
+      pipelineStage: 's1',
+      window24hOpen: false,
     }
 
-    await repository.create(input)
+    const mockResponse = { ...leadInput, id: '2', tenant_id: 't1', created_at: 'now' }
+    mockSupabase.from().insert().select().single.mockResolvedValue({ data: mockResponse, error: null })
 
-    // O insert deve ter sido chamado com o mapeamento correto
-    // Como insert() retorna a query, verificamos as chamadas no mock da query
-    // Mas para simplificar, verificamos se o resultado do repository é o mockData
-    const result = await repository.create(input)
-    expect(result.id).toBe('new-id')
+    const result = await repository.create(leadInput as any)
+
+    expect(result.id).toBe('2')
+    expect(mockSupabase.from().insert).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'Jane Doe',
+      tenant_id: 't1'
+    }))
   })
 
-  it('update deve retornar NotFoundError se não encontrar o lead', async () => {
-    const repository = new SupabaseLeadRepository(mockSupabase)
-    mockSupabase.resolveWith(null, null) // data=null, error=null
+  it('should list leads by tenant', async () => {
+    const mockData = [
+      { id: '1', name: 'Lead 1', tenant_id: 't1' },
+      { id: '2', name: 'Lead 2', tenant_id: 't1' }
+    ]
+    mockSupabase.from().select().eq().order.mockResolvedValue({ data: mockData, error: null })
 
-    await expect(repository.update('tenant-123', 'none', { name: 'New' }))
-      .rejects.toThrow('Lead com id "none" não encontrado')
+    const result = await repository.list('t1')
+
+    expect(result).toHaveLength(2)
+    expect(result[0].name).toBe('Lead 1')
+  })
+
+  it('should handle errors on delete', async () => {
+    mockSupabase.from().delete().match.mockResolvedValue({ error: { message: 'Database error' } })
+
+    await expect(repository.delete('t1', '1')).rejects.toThrow('Database error')
   })
 })
