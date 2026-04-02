@@ -1,10 +1,9 @@
 import { create } from 'zustand'
 import { Message, Conversation, Lead } from '@/types'
-import { subHours, subMinutes } from 'date-fns'
-import { useLeadsStore } from '@/lib/stores/leadsStore'
+import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/lib/stores/authStore'
 import { useConnectionsStore } from '@/lib/stores/connectionsStore'
-import { supabase } from '@/lib/supabase'
+import { useLeadsStore } from '@/lib/stores/leadsStore'
 
 // Mapper para converter snake_case do Supabase para camelCase do TS
 const mapMessageFromDb = (row: any): Message => ({
@@ -14,13 +13,13 @@ const mapMessageFromDb = (row: any): Message => ({
   content: row.content,
   senderId: row.sender_id,
   senderName: row.sender_name,
-  senderType: row.sender_type,
-  channel: row.channel,
+  senderType: row.sender_type as any,
+  channel: row.channel as any,
   createdAt: row.created_at,
   read: row.read,
-  status: row.status,
+  status: row.status as any,
   mediaUrl: row.media_url,
-  mediaType: row.media_type,
+  mediaType: row.media_type as any,
   wamid: row.wamid,
 })
 
@@ -29,8 +28,10 @@ interface ConversationsState {
   conversations: Conversation[]
   selectedConversationId: string | null
   initialized: boolean
+  isLoading: boolean
+  
   initializeConversations: (leads: Lead[]) => Promise<void>
-  subscribeToMessages: (tenantId: string) => () => void
+  subscribeToMessages: () => () => void
   setSelectedConversation: (leadId: string | null) => void
   sendMessage: (leadId: string, content: string) => Promise<void>
   sendMediaMessage: (leadId: string, file: File, type: 'image' | 'audio' | 'video' | 'document') => Promise<void>
@@ -38,15 +39,29 @@ interface ConversationsState {
   getConversationByLead: (leadId: string) => Conversation | null
 }
 
-export const useConversationsStore = create<ConversationsState>((set, get) => {
-  const initializeConversations = async (leads: Lead[]) => {
-    if (get().initialized) return
+export const useConversationsStore = create<ConversationsState>((set, get) => ({
+  messages: [],
+  conversations: [],
+  selectedConversationId: null,
+  initialized: false,
+  isLoading: false,
+
+  initializeConversations: async (leads: Lead[]) => {
+    const tenantId = useAuthStore.getState().user?.tenantId
+    if (!tenantId || leads.length === 0) return
     
-    // Buscar mensagens reais do Supabase
+    set({ isLoading: true })
     const { data: dbMessages, error } = await supabase
       .from('messages')
       .select('*')
+      .eq('tenant_id', tenantId)
       .order('created_at', { ascending: true })
+
+    if (error) {
+      console.error('Erro ao buscar mensagens:', error)
+      set({ isLoading: false })
+      return
+    }
 
     const allMessages = (dbMessages || []).map(mapMessageFromDb)
 
@@ -56,6 +71,7 @@ export const useConversationsStore = create<ConversationsState>((set, get) => {
       const unreadCount = leadMessages.filter((m) => !m.read && m.senderType === 'lead').length
 
       return {
+        tenantId: lead.tenantId,
         leadId: lead.id,
         lead,
         lastMessage,
@@ -70,87 +86,64 @@ export const useConversationsStore = create<ConversationsState>((set, get) => {
         const bTime = b.lastMessage?.createdAt || b.lead.updatedAt
         return new Date(bTime).getTime() - new Date(aTime).getTime()
       }),
-      initialized: true
+      initialized: true,
+      isLoading: false
     })
-  }
+  },
 
-  const subscribeToMessages = (tenantId: string) => {
+  subscribeToMessages: () => {
+    const tenantId = useAuthStore.getState().user?.tenantId
+    if (!tenantId) return () => {}
+
     const channel = supabase
-      .channel('realtime_inbox')
+      .channel(`tenant_${tenantId}_messages`)
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*', // INSERT, UPDATE, DELETE
           schema: 'public',
           table: 'messages',
           filter: `tenant_id=eq.${tenantId}`
         },
-        (payload) => {
-          const newMessage = mapMessageFromDb(payload.new)
-          
-          set((state) => {
-            // Se já existir (otimista), atualizamos com os dados reais (id, wamid, status)
-            const existingIndex = state.messages.findIndex(m => 
-              (m.wamid && m.wamid === newMessage.wamid) || 
-              (m.id.startsWith('msg-') && m.content === newMessage.content && m.leadId === newMessage.leadId)
-            )
+        async (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const newMessage = mapMessageFromDb(payload.new)
+            
+            set((state) => {
+              // De-duplicação de mensagem otimista
+              const exists = state.messages.some(m => 
+                (m.wamid && m.wamid === newMessage.wamid) || 
+                (m.id === newMessage.id)
+              )
+              
+              if (exists) return state
 
-            let updatedMessages
-            if (existingIndex !== -1) {
-              updatedMessages = [...state.messages]
-              updatedMessages[existingIndex] = newMessage
-            } else {
-              updatedMessages = [...state.messages, newMessage]
-            }
+              const updatedMessages = [...state.messages, newMessage]
+              const updatedConversations = state.conversations.map((conv) =>
+                conv.leadId === newMessage.leadId
+                  ? { 
+                      ...conv, 
+                      lastMessage: newMessage, 
+                      unreadCount: newMessage.senderType === 'lead' ? conv.unreadCount + 1 : conv.unreadCount 
+                    }
+                  : conv
+              )
 
-            const updatedConversations = state.conversations.map((conv) =>
-              conv.leadId === newMessage.leadId
-                ? { 
-                    ...conv, 
-                    lastMessage: newMessage, 
-                    unreadCount: newMessage.senderType === 'lead' ? conv.unreadCount + 1 : conv.unreadCount 
-                  }
-                : conv
-            )
-
-            return {
-              messages: updatedMessages,
-              conversations: updatedConversations.sort((a, b) => {
-                const aTime = a.lastMessage?.createdAt || a.lead.updatedAt
-                const bTime = b.lastMessage?.createdAt || b.lead.updatedAt
-                return new Date(bTime).getTime() - new Date(aTime).getTime()
-              })
-            }
-          })
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'messages',
-          filter: `tenant_id=eq.${tenantId}`
-        },
-        (payload) => {
-          const updatedMessage = mapMessageFromDb(payload.new)
-          
-          set((state) => {
-            const updatedMessages = state.messages.map(m => 
-              m.id === updatedMessage.id ? updatedMessage : m
-            )
-
-            const updatedConversations = state.conversations.map((conv) =>
-              conv.leadId === updatedMessage.leadId && conv.lastMessage?.id === updatedMessage.id
-                ? { ...conv, lastMessage: updatedMessage }
-                : conv
-            )
-
-            return {
-              messages: updatedMessages,
-              conversations: updatedConversations
-            }
-          })
+              return {
+                messages: updatedMessages,
+                conversations: updatedConversations.sort((a, b) => {
+                  const aTime = a.lastMessage?.createdAt || a.lead.updatedAt
+                  const bTime = b.lastMessage?.createdAt || b.lead.updatedAt
+                  return new Date(bTime).getTime() - new Date(aTime).getTime()
+                })
+              }
+            })
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedMsg = mapMessageFromDb(payload.new)
+            set((state) => ({
+              messages: state.messages.map(m => m.id === updatedMsg.id ? updatedMsg : m)
+            }))
+          }
         }
       )
       .subscribe()
@@ -158,147 +151,136 @@ export const useConversationsStore = create<ConversationsState>((set, get) => {
     return () => {
       supabase.removeChannel(channel)
     }
-  }
+  },
 
-  return {
-    messages: [],
-    conversations: [],
-    selectedConversationId: null,
-    initialized: false,
-    initializeConversations,
-    subscribeToMessages,
+  setSelectedConversation: (leadId: string | null) => {
+    set({ selectedConversationId: leadId })
+  },
 
-    setSelectedConversation: (leadId: string | null) => {
-      set({ selectedConversationId: leadId })
-    },
+  sendMessage: async (leadId: string, content: string) => {
+    const user = useAuthStore.getState().user
+    if (!user) return
 
-    sendMessage: async (leadId: string, content: string) => {
-      const currentUser = useAuthStore.getState().user || { id: '1', name: 'Você' }
-      const lead = get().conversations.find((c) => c.leadId === leadId)?.lead
+    const lead = get().conversations.find((c) => c.leadId === leadId)?.lead
+    if (!lead) return
+
+    // Mensagem otimista
+    const tempId = `temp-${Date.now()}`
+    const newMessage: Message = {
+      id: tempId,
+      tenantId: user.tenantId,
+      leadId,
+      content,
+      senderId: user.id,
+      senderName: user.name,
+      senderType: 'user',
+      channel: lead.channel,
+      createdAt: new Date().toISOString(),
+      read: true,
+      status: 'pending'
+    }
+
+    set((state) => ({
+      messages: [...state.messages, newMessage],
+    }))
+
+    try {
+      const activeConnection = useConnectionsStore.getState().getActiveConnection()
       
-      const newMessage: Message = {
-        id: `msg-${leadId}-${Date.now()}`,
-        leadId,
-        content,
-        senderId: currentUser.id,
-        senderName: currentUser.name || 'Você',
-        senderType: 'user',
-        channel: lead?.channel || 'whatsapp',
-        createdAt: new Date().toISOString(),
-        read: true,
-        status: 'pending'
-      }
-
-      set((state) => ({
-        messages: [...state.messages, newMessage],
-        conversations: state.conversations.map((conv) =>
-          conv.leadId === leadId
-            ? { ...conv, lastMessage: newMessage, unreadCount: 0 }
-            : conv
-        ),
-      }))
-
-      try {
-        const activeConnection = useConnectionsStore.getState().getActiveConnection()
-        
-        if (activeConnection?.provider === 'evolution' && activeConnection.instanceName && lead?.phone) {
-          const response = await fetch('/api/evolution/send-message', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              instanceName: activeConnection.instanceName,
-              recipientPhone: lead.phone.replace(/\D/g, ''),
-              message: content,
-              tenantId: lead.tenantId,
-              leadId: lead.id,
-              senderId: currentUser.id,
-              senderName: currentUser.name || 'Você'
-            })
-          })
-          const result = await response.json()
-          if (result.success && result.wamid) {
-            // Atualizar mensagem local com o wamid real
-            set((state) => ({
-              messages: state.messages.map(m => m.id === newMessage.id ? { ...m, wamid: result.wamid } : m)
-            }))
-          }
-        }
-      } catch (err) {
-        console.error('Falha ao enviar mensagem para API:', err)
-      }
-
-      // "Assumir" lead
-      useLeadsStore.getState().updateLead(leadId, { assignedTo: currentUser.id })
-    },
-
-    sendMediaMessage: async (leadId: string, file: File, type: 'image' | 'audio' | 'video' | 'document') => {
-      const currentUser = useAuthStore.getState().user || { id: '1', name: 'Você' }
-      const lead = get().conversations.find((c) => c.leadId === leadId)?.lead
-      
-      const tempUrl = URL.createObjectURL(file)
-      const newMessage: Message = {
-        id: `msg-media-${leadId}-${Date.now()}`,
-        leadId,
-        content: `[Mídia: ${type}]`,
-        senderId: currentUser.id,
-        senderName: currentUser.name || 'Você',
-        senderType: 'user',
-        channel: lead?.channel || 'whatsapp',
-        createdAt: new Date().toISOString(),
-        read: true,
-        status: 'pending',
-        mediaUrl: tempUrl,
-        mediaType: type
-      }
-
-      set((state) => ({
-        messages: [...state.messages, newMessage],
-        conversations: state.conversations.map((conv) =>
-          conv.leadId === leadId
-            ? { ...conv, lastMessage: newMessage, unreadCount: 0 }
-            : conv
-        ),
-      }))
-
-      try {
-        const activeConnection = useConnectionsStore.getState().getActiveConnection()
-        if (!activeConnection || !lead?.phone) return
-
-        const formData = new FormData()
-        formData.append('file', file)
-        formData.append('type', type)
-        formData.append('instanceName', activeConnection.instanceName || '')
-        formData.append('recipientPhone', lead.phone.replace(/\D/g, ''))
-        formData.append('tenantId', lead.tenantId || '')
-        formData.append('leadId', lead.id)
-        formData.append('senderId', currentUser.id)
-        formData.append('senderName', currentUser.name || 'Você')
-
-        const response = await fetch('/api/evolution/send-media', {
-          method: 'POST',
-          body: formData
+      const response = await fetch('/api/evolution/send-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          instanceName: activeConnection?.instanceName,
+          recipientPhone: lead.phone?.replace(/\D/g, ''),
+          message: content,
+          tenantId: user.tenantId,
+          leadId: lead.id,
+          senderId: user.id,
+          senderName: user.name
         })
-        
-        const result = await response.json()
-        if (result.success && result.wamid) {
-           set((state) => ({
-             messages: state.messages.map(m => m.id === newMessage.id ? { ...m, wamid: result.wamid, mediaUrl: result.mediaUrl } : m)
-           }))
-        }
-      } catch (err) {
-        console.error('Falha ao enviar mídia:', err)
-      }
-    },
+      })
+      
+      const result = await response.json()
+      if (!result.success) throw new Error(result.error)
 
-    getMessagesByLead: (leadId: string) => {
-      return get().messages
-        .filter((m) => m.leadId === leadId)
-        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-    },
+      // A mensagem real virá pelo Realtime e substituirá a otimista se os IDS baterem ou se usarmos wamid
+    } catch (err) {
+      console.error('Falha ao enviar mensagem:', err)
+      // Marcar como falha na UI
+      set((state) => ({
+        messages: state.messages.map(m => m.id === tempId ? { ...m, status: 'failed' } : m)
+      }))
+    }
+  },
 
-    getConversationByLead: (leadId: string) => {
-      return get().conversations.find((c) => c.leadId === leadId) || null
-    },
-  }
-})
+  sendMediaMessage: async (leadId: string, file: File, type: 'image' | 'audio' | 'video' | 'document') => {
+    const user = useAuthStore.getState().user
+    if (!user) return
+
+    const lead = get().conversations.find((c) => c.leadId === leadId)?.lead
+    if (!lead) return
+
+    const tempUrl = URL.createObjectURL(file)
+    const tempId = `temp-media-${Date.now()}`
+    
+    const newMessage: Message = {
+      id: tempId,
+      tenantId: user.tenantId,
+      leadId,
+      content: `[Mídia: ${type}]`,
+      senderId: user.id,
+      senderName: user.name,
+      senderType: 'user',
+      channel: lead.channel,
+      createdAt: new Date().toISOString(),
+      read: true,
+      status: 'pending',
+      mediaUrl: tempUrl,
+      mediaType: type
+    }
+
+    set((state) => ({
+      messages: [...state.messages, newMessage],
+    }))
+
+    try {
+      const activeConnection = useConnectionsStore.getState().getActiveConnection()
+      
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('type', type)
+      formData.append('instanceName', activeConnection?.instanceName || '')
+      formData.append('recipientPhone', lead.phone?.replace(/\D/g, '') || '')
+      formData.append('tenantId', user.tenantId || '')
+      formData.append('leadId', lead.id)
+      formData.append('senderId', user.id)
+      formData.append('senderName', user.name)
+
+      const response = await fetch('/api/evolution/send-media', {
+        method: 'POST',
+        body: formData
+      })
+      
+      const result = await response.json()
+      if (!result.success) throw new Error(result.error)
+
+    } catch (err) {
+      console.error('Falha ao enviar mídia:', err)
+      set((state) => ({
+        messages: state.messages.map(m => m.id === tempId ? { ...m, status: 'failed' } : m)
+      }))
+    }
+  },
+
+  getMessagesByLead: (leadId: string) => {
+    return get().messages
+      .filter((m) => m.leadId === leadId)
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+  },
+
+  getConversationByLead: (leadId: string) => {
+    return get().conversations.find((c) => c.leadId === leadId) || null
+  },
+}))
 

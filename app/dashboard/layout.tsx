@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/stores/authStore'
 import { useConversationsStore } from '@/lib/stores/conversationsStore'
+import { useLeadsStore } from '@/lib/stores/leadsStore'
+import { useConnectionsStore } from '@/lib/stores/connectionsStore'
 import { Sidebar } from '@/components/Sidebar'
 import { Topbar } from '@/components/Topbar'
 
@@ -12,60 +14,43 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const { isAuthenticated, user, client } = useAuthStore()
-  const { subscribeToMessages } = useConversationsStore()
+  const { isAuthenticated, user, refreshUser } = useAuthStore()
+  const { fetchLeads, leads } = useLeadsStore()
+  const { fetchConnections } = useConnectionsStore()
+  const { initializeConversations, subscribeToMessages } = useConversationsStore()
   const router = useRouter()
   const [isChecking, setIsChecking] = useState(true)
 
+  // 1. Verificar sessão ao montar
   useEffect(() => {
-    if (client?.id) {
-      const unsubscribe = subscribeToMessages(client.id)
+    refreshUser().finally(() => setIsChecking(false))
+  }, [refreshUser])
+
+  // 2. Carregar dados iniciais quando o tenantId estiver disponível
+  useEffect(() => {
+    if (user?.tenantId) {
+      fetchLeads()
+      fetchConnections()
+    }
+  }, [user?.tenantId, fetchLeads, fetchConnections])
+
+  // 3. Inicializar conversas e Realtime
+  useEffect(() => {
+    if (user?.tenantId && leads.length > 0) {
+      initializeConversations(leads)
+      const unsubscribe = subscribeToMessages()
       return () => unsubscribe()
     }
-  }, [client?.id, subscribeToMessages])
+  }, [user?.tenantId, leads, initializeConversations, subscribeToMessages])
 
+  // 4. Proteção de rota
   useEffect(() => {
-    // Pequeno delay para permitir que o estado seja atualizado após o selectClient
-    const timer = setTimeout(() => {
-      if (!isAuthenticated) {
-        router.push('/')
-        setIsChecking(false)
-        return
-      }
-
-      // Se for owner, só permite acessar se tiver um cliente selecionado
-      if (user?.role === 'owner') {
-        if (!client) {
-          router.push('/admin/clients')
-          setIsChecking(false)
-          return
-        }
-      }
-
-      // Se não for owner e não tiver cliente, redireciona para login
-      if (user?.role !== 'owner' && !client) {
-        router.push('/')
-        setIsChecking(false)
-        return
-      }
-
-      setIsChecking(false)
-    }, 50)
-
-    return () => clearTimeout(timer)
-  }, [isAuthenticated, user, client, router])
+    if (!isChecking && !isAuthenticated) {
+      router.push('/')
+    }
+  }, [isChecking, isAuthenticated, router])
 
   if (isChecking || !isAuthenticated) {
-    return null
-  }
-
-  // Se for owner sem cliente selecionado, não renderiza
-  if (user?.role === 'owner' && !client) {
-    return null
-  }
-
-  // Se não for owner e não tiver cliente, não renderiza
-  if (user?.role !== 'owner' && !client) {
     return null
   }
 

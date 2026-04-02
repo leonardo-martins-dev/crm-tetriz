@@ -149,57 +149,79 @@ export default function InboxPage() {
           <h2 className="text-lg font-semibold">Conversas</h2>
         </div>
         <div className="flex-1 overflow-y-auto scrollbar-hover">
-          {conversations.map((conv) => {
-            const isSelected = selectedConversationId === conv.leadId
-            return (
-              <div
-                key={conv.leadId}
-                onClick={() => handleSelectConversation(conv.leadId)}
-                className={`cursor-pointer border-b p-4 transition-colors hover:bg-accent ${
-                  isSelected ? 'bg-accent' : ''
-                }`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium truncate">{conv.lead.name}</span>
-                      {conv.unreadCount > 0 && (
-                        <Badge variant="info" className="h-5 min-w-[20px] px-1.5 text-xs">
-                          {conv.unreadCount}
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <ChannelBadge channel={conv.lead.channel} />
-                      {!conv.lead.window24hOpen && (
-                        <Badge variant="danger" className="gap-1">
-                          <Lock className="h-3 w-3" />
-                          Janela fechada
-                        </Badge>
-                      )}
-                    </div>
-                    {conv.lastMessage && (
-                      <p className="text-sm text-muted-foreground truncate flex items-center gap-1">
-                        {conv.lastMessage.mediaType === 'image' && <ImageIcon className="h-3 w-3" />}
-                        {conv.lastMessage.mediaType === 'audio' && <Music className="h-3 w-3" />}
-                        {conv.lastMessage.mediaType === 'video' && <Video className="h-3 w-3" />}
-                        {conv.lastMessage.mediaType === 'document' && <FileText className="h-3 w-3" />}
-                        {conv.lastMessage.content}
-                      </p>
-                    )}
-                    {conv.lastMessage && (
-                      <div className="flex items-center justify-between mt-1">
-                        <p className="text-xs text-muted-foreground">
-                          {formatRelativeTime(conv.lastMessage.createdAt)}
-                        </p>
-                        {conv.lastMessage.senderType !== 'lead' && getStatusIcon(conv.lastMessage.status)}
+          {conversations.length > 0 ? (
+            conversations.map((conv) => {
+              const isSelected = selectedConversationId === conv.leadId
+              return (
+                <div
+                  key={conv.leadId}
+                  onClick={() => handleSelectConversation(conv.leadId)}
+                  className={`cursor-pointer border-b p-4 transition-colors hover:bg-accent ${
+                    isSelected ? 'bg-accent' : ''
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium truncate">{conv.lead.name}</span>
+                        {conv.unreadCount > 0 && (
+                          <Badge variant="info" className="h-5 min-w-[20px] px-1.5 text-xs">
+                            {conv.unreadCount}
+                          </Badge>
+                        )}
                       </div>
-                    )}
+                      <div className="flex items-center gap-2 mb-1">
+                        <ChannelBadge channel={conv.lead.channel} />
+                        {!conv.lead.window24hOpen && (
+                          <Badge variant="danger" className="gap-1">
+                            <Lock className="h-3 w-3" />
+                            Janela fechada
+                          </Badge>
+                        )}
+                      </div>
+                      {conv.lastMessage && (
+                        <p className="text-sm text-muted-foreground truncate flex items-center gap-1">
+                          {conv.lastMessage.mediaType === 'image' && <ImageIcon className="h-3 w-3" />}
+                          {conv.lastMessage.mediaType === 'audio' && <Music className="h-3 w-3" />}
+                          {conv.lastMessage.mediaType === 'video' && <Video className="h-3 w-3" />}
+                          {conv.lastMessage.mediaType === 'document' && <FileText className="h-3 w-3" />}
+                          {conv.lastMessage.content}
+                        </p>
+                      )}
+                      {conv.lastMessage && (
+                        <div className="flex items-center justify-between mt-1">
+                          <p className="text-xs text-muted-foreground">
+                            {formatRelativeTime(conv.lastMessage.createdAt)}
+                          </p>
+                          {conv.lastMessage.senderType !== 'lead' && getStatusIcon(conv.lastMessage.status)}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
+              )
+            })
+          ) : (
+            <div className="p-8 text-center bg-muted/30 h-full flex flex-col items-center justify-center">
+              <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
+                <Bot className="h-6 w-6 text-muted-foreground" />
               </div>
-            )
-          })}
+              <h3 className="text-sm font-medium">Nenhuma conversa</h3>
+              <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">
+                As conversas aparecerão aqui assim que seus leads entrarem em contato.
+              </p>
+              {leads.length === 0 && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="mt-4 text-xs"
+                  onClick={() => window.location.href = '/dashboard/settings/connections'}
+                >
+                  Configurar Conexão
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

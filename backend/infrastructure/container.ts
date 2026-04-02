@@ -4,6 +4,7 @@ import { SupabaseMessageRepository } from './repositories/supabase-message.repos
 import { SupabaseConnectionRepository } from './repositories/supabase-connection.repository'
 import { SupabaseConversationRepository } from './repositories/supabase-conversation.repository'
 import { SupabaseAgentRepository } from './repositories/supabase-agent.repository'
+import { SupabaseProfileRepository } from './repositories/supabase-profile.repository'
 
 import { MetaWhatsAppService } from './services/meta-whatsapp.service'
 import { EvolutionApiServiceImpl } from './services/evolution-api.service'
@@ -21,6 +22,7 @@ export function createContainer(supabase: SupabaseClient) {
   const connectionRepo = new SupabaseConnectionRepository(supabase)
   const conversationRepo = new SupabaseConversationRepository(supabase)
   const agentRepo = new SupabaseAgentRepository(supabase)
+  const profileRepo = new SupabaseProfileRepository(supabase)
 
   // Services
   const whatsappService = new MetaWhatsAppService()
@@ -34,6 +36,7 @@ export function createContainer(supabase: SupabaseClient) {
     connectionRepo,
     conversationRepo,
     agentRepo,
+    profileRepo,
     whatsappService,
     evolutionService,
     aiOrchestrator,

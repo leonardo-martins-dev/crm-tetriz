@@ -1,11 +1,9 @@
-import { Profile } from '../../domain/entities'
+import { Profile } from '../../domain/entities/profile'
 
 export interface ProfileRepository {
   findById(id: string): Promise<Profile | null>
-  findByTenantId(tenantId: string): Promise<Profile[]>
-  create(data: Omit<Profile, 'id' | 'createdAt'>): Promise<Profile>
-  update(id: string, data: Partial<Omit<Profile, 'id' | 'createdAt'>>): Promise<Profile>
-  toggleActive(id: string): Promise<Profile>
-  delete(id: string): Promise<void>
-  countByTenantId(tenantId: string): Promise<number>
+  findByEmail(email: string): Promise<Profile | null>
+  listByTenant(tenantId: string): Promise<Profile[]>
+  create(profile: Profile): Promise<Profile>
+  update(id: string, updates: Partial<Profile>): Promise<Profile>
 }

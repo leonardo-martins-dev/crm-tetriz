@@ -1,4 +1,6 @@
 import { create } from 'zustand'
+import { supabase } from '@/lib/supabase'
+import { useAuthStore } from '@/lib/stores/authStore'
 
 export type TriggerType = 'tag' | 'pipeline_stage'
 
@@ -15,6 +17,7 @@ export interface AgentPermissions {
 
 export interface Agent {
   id: string
+  tenantId?: string
   name: string
   prompt: string
   triggers: AgentTrigger[]
@@ -27,79 +30,142 @@ export interface Agent {
 
 interface AgentsState {
   agents: Agent[]
-  addAgent: (agent: Omit<Agent, 'id' | 'createdAt'>) => void
-  updateAgent: (agentId: string, updates: Partial<Agent>) => void
-  deleteAgent: (agentId: string) => void
-  toggleAgentActive: (agentId: string) => void
+  isLoading: boolean
+  fetchAgents: () => Promise<void>
+  addAgent: (agent: Omit<Agent, 'id' | 'createdAt'>) => Promise<void>
+  updateAgent: (agentId: string, updates: Partial<Agent>) => Promise<void>
+  deleteAgent: (agentId: string) => Promise<void>
+  toggleAgentActive: (agentId: string) => Promise<void>
 }
 
-const mockAgents: Agent[] = [
-  {
-    id: 'agent-1',
-    name: 'Assistente de Qualificação',
-    prompt: 'Você é um assistente simpático. Sua função é responder a leads novos e perguntar a renda deles.',
-    triggers: [
-      { id: 'trig-1', type: 'pipeline_stage', value: 'Novo Lead' }
-    ],
-    permissions: {
-      canAssignTags: true,
-      canMovePipeline: false,
-    },
-    model: 'gpt-4o',
-    apiKey: 'sk-mock-12345',
-    active: true,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'agent-2',
-    name: 'Cobrança Educada',
-    prompt: 'Seja polido mas firme relembrando o cliente que um orçamento vence em 24h.',
-    triggers: [
-      { id: 'trig-2', type: 'tag', value: 'Follow-up' },
-      { id: 'trig-3', type: 'pipeline_stage', value: 'Orçamento' }
-    ],
-    permissions: {
-      canAssignTags: false,
-      canMovePipeline: true,
-    },
-    model: 'claude-3-5-sonnet',
-    apiKey: 'sk-ant-mock-987',
-    active: false,
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-  },
-]
+export const useAgentsStore = create<AgentsState>((set, get) => ({
+  agents: [],
+  isLoading: false,
 
-export const useAgentsStore = create<AgentsState>((set) => ({
-  agents: mockAgents,
+  fetchAgents: async () => {
+    const tenantId = useAuthStore.getState().user?.tenantId
+    if (!tenantId) return
 
-  addAgent: (agentData) => {
-    const newAgent: Agent = {
-      ...agentData,
-      id: `agent-${Date.now()}`,
-      createdAt: new Date().toISOString(),
+    set({ isLoading: true })
+    try {
+      const { data, error } = await supabase
+        .from('agents')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .order('name', { ascending: true })
+
+      if (error) throw error
+
+      set({ 
+        agents: (data || []).map(row => ({
+          id: row.id,
+          tenantId: row.tenant_id,
+          name: row.name,
+          prompt: row.prompt,
+          triggers: row.triggers || [],
+          permissions: row.permissions || { canAssignTags: false, canMovePipeline: false },
+          model: row.model,
+          apiKey: row.api_key_encrypted, // Note: Encrypted on backend
+          active: row.active,
+          createdAt: row.created_at,
+        })), 
+        isLoading: false 
+      })
+    } catch (err) {
+      console.error('Erro ao buscar agentes:', err)
+      set({ isLoading: false })
     }
-    set((state) => ({ agents: [...state.agents, newAgent] }))
   },
 
-  updateAgent: (agentId, updates) => {
-    set((state) => ({
-      agents: state.agents.map((agent) =>
-        agent.id === agentId ? { ...agent, ...updates } : agent
-      ),
-    }))
+  addAgent: async (agentData) => {
+    const tenantId = useAuthStore.getState().user?.tenantId
+    if (!tenantId) return
+
+    try {
+      const { data, error } = await supabase
+        .from('agents')
+        .insert({
+          tenant_id: tenantId,
+          name: agentData.name,
+          prompt: agentData.prompt,
+          triggers: agentData.triggers,
+          permissions: agentData.permissions,
+          model: agentData.model,
+          api_key_encrypted: agentData.apiKey,
+          active: agentData.active,
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+
+      const newAgent: Agent = {
+        id: data.id,
+        tenantId: data.tenant_id,
+        name: data.name,
+        prompt: data.prompt,
+        triggers: data.triggers,
+        permissions: data.permissions,
+        model: data.model,
+        apiKey: data.api_key_encrypted,
+        active: data.active,
+        createdAt: data.created_at,
+      }
+
+      set((state) => ({ agents: [...state.agents, newAgent] }))
+    } catch (err) {
+      console.error('Erro ao adicionar agente:', err)
+    }
   },
 
-  deleteAgent: (agentId) => {
-    set((state) => ({
-      agents: state.agents.filter((agent) => agent.id !== agentId),
-    }))
+  updateAgent: async (agentId, updates) => {
+    try {
+      const rowUpdates: any = {}
+      if (updates.name !== undefined) rowUpdates.name = updates.name
+      if (updates.prompt !== undefined) rowUpdates.prompt = updates.prompt
+      if (updates.triggers !== undefined) rowUpdates.triggers = updates.triggers
+      if (updates.permissions !== undefined) rowUpdates.permissions = updates.permissions
+      if (updates.model !== undefined) rowUpdates.model = updates.model
+      if (updates.apiKey !== undefined) rowUpdates.api_key_encrypted = updates.apiKey
+      if (updates.active !== undefined) rowUpdates.active = updates.active
+
+      const { error } = await supabase
+        .from('agents')
+        .update(rowUpdates)
+        .eq('id', agentId)
+
+      if (error) throw error
+
+      set((state) => ({
+        agents: state.agents.map((agent) =>
+          agent.id === agentId ? { ...agent, ...updates } : agent
+        ),
+      }))
+    } catch (err) {
+      console.error('Erro ao atualizar agente:', err)
+    }
   },
 
-  toggleAgentActive: (agentId) => {
-    set((state) => ({
-      agents: state.agents.map((agent) =>
-        agent.id === agentId ? { ...agent, active: !agent.active } : agent
-      ),
-    }))
+  deleteAgent: async (agentId) => {
+    try {
+      const { error } = await supabase
+        .from('agents')
+        .delete()
+        .eq('id', agentId)
+
+      if (error) throw error
+
+      set((state) => ({
+        agents: state.agents.filter((agent) => agent.id !== agentId),
+      }))
+    } catch (err) {
+      console.error('Erro ao deletar agente:', err)
+    }
+  },
+
+  toggleAgentActive: async (agentId) => {
+    const agent = get().agents.find(a => a.id === agentId)
+    if (!agent) return
+    await get().updateAgent(agentId, { active: !agent.active })
   },
 }))

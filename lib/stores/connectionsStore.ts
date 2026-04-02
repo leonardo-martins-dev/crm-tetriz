@@ -1,10 +1,13 @@
 import { create } from 'zustand'
+import { supabase } from '@/lib/supabase'
+import { useAuthStore } from '@/lib/stores/authStore'
 
 export type ConnectionProvider = 'meta' | 'evolution'
 export type ConnectionType = 'whatsapp'
 
 export interface Connection {
   id: string
+  tenantId: string
   type: ConnectionType
   provider: ConnectionProvider
   name: string
@@ -24,42 +27,86 @@ export interface Connection {
 
 interface ConnectionsState {
   connections: Connection[]
-  updateConnection: (id: string, updates: Partial<Connection>) => void
+  isLoading: boolean
+  fetchConnections: () => Promise<void>
+  updateConnection: (id: string, updates: Partial<Connection>) => Promise<void>
   getConnection: (id: string) => Connection | undefined
   getActiveConnection: () => Connection | undefined
-  connectEvolution: (instanceName: string, evolutionApiKey: string) => void
-  disconnectProvider: (id: string) => void
+  connectEvolution: (instanceName: string, evolutionApiKey: string) => Promise<void>
+  disconnectProvider: (id: string) => Promise<void>
 }
 
-const initialConnections: Connection[] = [
-  {
-    id: 'conn-meta',
-    type: 'whatsapp',
-    provider: 'meta',
-    name: 'WhatsApp Oficial (Meta)',
-    connected: false,
-  },
-  {
-    id: 'conn-evolution',
-    type: 'whatsapp',
-    provider: 'evolution',
-    name: 'WhatsApp (QR Code)',
-    connected: false,
-  },
-]
+const mapConnectionFromDb = (row: any): Connection => ({
+  id: row.id,
+  tenantId: row.tenant_id,
+  type: row.type as ConnectionType,
+  provider: row.provider as ConnectionProvider,
+  name: row.name,
+  connected: row.connected,
+  phoneNumberId: row.phone_number_id,
+  wabaId: row.waba_id,
+  instanceName: row.instance_name,
+  instanceId: row.instance_id,
+  evolutionApiKey: row.evolution_api_key,
+  accountName: row.account_name,
+  connectedAt: row.connected_at,
+  lastSync: row.last_sync,
+})
 
 export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
-  connections: initialConnections,
+  connections: [],
+  isLoading: false,
 
-  updateConnection: (id: string, updates: Partial<Connection>) => {
-    set((state) => ({
-      connections: state.connections.map((conn) =>
-        conn.id === id ? { ...conn, ...updates } : conn
-      ),
-    }))
+  fetchConnections: async () => {
+    const tenantId = useAuthStore.getState().user?.tenantId
+    if (!tenantId) return
+
+    set({ isLoading: true })
+    try {
+      const { data, error } = await supabase
+        .from('connections')
+        .select('*')
+        .eq('tenant_id', tenantId)
+
+      if (error) throw error
+
+      set({ connections: (data || []).map(mapConnectionFromDb), isLoading: false })
+    } catch (err) {
+      console.error('Erro ao buscar conexões:', err)
+      set({ isLoading: false })
+    }
   },
 
-  getConnection: (id: string) => {
+  updateConnection: async (id, updates) => {
+    const tenantId = useAuthStore.getState().user?.tenantId
+    if (!tenantId) return
+
+    try {
+      const rowUpdates: any = {}
+      if (updates.name !== undefined) rowUpdates.name = updates.name
+      if (updates.connected !== undefined) rowUpdates.connected = updates.connected
+      if (updates.accountName !== undefined) rowUpdates.account_name = updates.accountName
+      if (updates.instanceName !== undefined) rowUpdates.instance_name = updates.instanceName
+
+      const { error } = await supabase
+        .from('connections')
+        .update(rowUpdates)
+        .eq('id', id)
+        .eq('tenant_id', tenantId)
+
+      if (error) throw error
+
+      set((state) => ({
+        connections: state.connections.map((conn) =>
+          conn.id === id ? { ...conn, ...updates } : conn
+        ),
+      }))
+    } catch (err) {
+      console.error('Erro ao atualizar conexão:', err)
+    }
+  },
+
+  getConnection: (id) => {
     return get().connections.find((conn) => conn.id === id)
   },
 
@@ -67,43 +114,32 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
     return get().connections.find((conn) => conn.connected)
   },
 
-  connectEvolution: (instanceName: string, evolutionApiKey: string) => {
-    set((state) => ({
-      connections: state.connections.map((conn) => {
-        if (conn.provider === 'evolution') {
-          return {
-            ...conn,
-            connected: true,
-            instanceName,
-            evolutionApiKey,
-            connectedAt: new Date().toISOString(),
-            accountName: instanceName,
-            lastSync: new Date().toISOString(),
-          }
-        }
-        return conn
-      }),
-    }))
+  connectEvolution: async (instanceName, evolutionApiKey) => {
+    const tenantId = useAuthStore.getState().user?.tenantId
+    if (!tenantId) return
+
+    const conn = get().connections.find(c => c.provider === 'evolution')
+    if (!conn) return
+
+    await get().updateConnection(conn.id, {
+      connected: true,
+      instanceName,
+      evolutionApiKey,
+      connectedAt: new Date().toISOString(),
+      accountName: instanceName,
+      lastSync: new Date().toISOString(),
+    })
   },
 
-  disconnectProvider: (id: string) => {
-    set((state) => ({
-      connections: state.connections.map((conn) =>
-        conn.id === id
-          ? {
-              ...conn,
-              connected: false,
-              connectedAt: undefined,
-              accountName: undefined,
-              lastSync: undefined,
-              instanceName: undefined,
-              evolutionApiKey: undefined,
-              phoneNumberId: undefined,
-              wabaId: undefined,
-            }
-          : conn
-      ),
-    }))
+  disconnectProvider: async (id) => {
+    await get().updateConnection(id, {
+      connected: false,
+      accountName: undefined,
+      instanceName: undefined,
+      evolutionApiKey: undefined,
+      phoneNumberId: undefined,
+      wabaId: undefined,
+    })
   },
 }))
 
