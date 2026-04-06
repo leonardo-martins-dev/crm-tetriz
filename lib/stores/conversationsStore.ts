@@ -3,6 +3,7 @@ import { Message, Conversation, Lead } from '@/types'
 import { useAuthStore } from '@/lib/stores/authStore'
 import { useConnectionsStore } from '@/lib/stores/connectionsStore'
 import { getMessageRepository, getConversationRepository } from '@/infrastructure/repositories'
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 
 // Mapper para converter snake_case do Supabase para camelCase do TS
 const messageRepo = getMessageRepository()
@@ -86,7 +87,7 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
           table: 'messages',
           filter: `tenant_id=eq.${tenantId}`
         },
-        async (payload) => {
+        async (payload: RealtimePostgresChangesPayload<any>) => {
           if (payload.eventType === 'INSERT') {
             // Aqui ainda precisamos do mapeamento local pois o payload do Realtime é snake_case
             const newMessage: Message = {
