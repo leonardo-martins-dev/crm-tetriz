@@ -2,47 +2,46 @@
 
 Este projeto segue os princípios da **Clean Architecture** e **S.O.L.I.D.** para garantir que o sistema seja escalável, testável e independente de frameworks externos.
 
-## 🏗️ Camadas do Backend
+## 🏗️ Estrutura de Pastas e Camadas
 
-O backend está organizado em camadas concêntricas, onde as dependências apontam para dentro (em direção ao domínio).
+O sistema está dividido em uma clara separação entre a lógica de domínio (Backend) e a interface do usuário (Frontend).
 
-### 1. 📂 `domain/` (Coração do Sistema)
-- **Entidades**: Representam os conceitos de negócio (ex: `Lead`, `Message`, `Agent`). São classes puras TypeScript sem dependências externas.
-- **Enums**: Definições globais de tipos e estados (ex: `MessageSenderType`, `LeadStatus`).
-- **Erros**: Exceções customizadas para falhas de domínio.
+### 1. 📂 `backend/` (Regras de Domínio)
+- **`domain/`**: Entidades puras e Enums. É o coração do sistema, livre de dependências de framework.
+- **`application/`**: Use cases (ex: `renamePipelineStage`) e interfaces de repositórios.
+- **`infrastructure/`**: Implementações reais que comunicam com o Supabase (`supabase-lead.repository.ts`, etc.).
 
-### 2. 📂 `application/` (Regras de Negócio)
-- **Use Cases**: Contêm a lógica específica de cada funcionalidade (ex: `handleIncomingMessage.ts`). Eles orquestram as entidades e chamam os repositórios/serviços.
-- **Repositories (Interfaces)**: Definem o contrato que a infraestrutura deve seguir. Isso permite trocar o banco de dados (ex: Supabase por Postgres puro) sem alterar a lógica de negócio.
-- **Services (Interfaces)**: Definem contratos para serviços externos (ex: `WhatsAppService`, `AiOrchestrator`).
+### 2. 📂 `infrastructure/repositories/` (Ponto de Entrada Frontend)
+- **`index.ts`**: Atua como um **Service Locator/DI Container** simplificado para as Stores do Frontend. Ele instancia as implementações em `backend/infrastructure/repositories` injetando o cliente Supabase.
 
-### 3. 📂 `infrastructure/` (Implementação Técnica)
-- **Repositories (Supabase)**: Implementações reais que comunicam com as tabelas do Supabase utilizando o cliente `@supabase/supabase-js`.
-- **Services**: Implementações reais de integração (ex: `EvolutionApiServiceImpl`, `OpenAiService`).
-- **Container**: Sistema de injeção de dependência manual (`container.ts`) que instancia todas as classes e injeta as dependências necessárias nos Use Cases.
+### 3. 📂 `lib/stores/` (Gerenciamento de Estado)
+- Utiliza **Zustand** para manter o estado global da aplicação.
+- Cada store (ex: `conversationsStore`) é responsável por buscar dados iniciais e gerenciar o estado local.
 
 ---
 
-## ⚡ Fluxo de Dados (Data Flow)
+## ⚡ Realtime e Sincronização de Dados
 
-1.  **Entrada**: Uma requisição chega via API Route (ex: `app/api/evolution/webhook/route.ts`).
-2.  **Injeção**: O container é inicializado com o cliente Supabase.
-3.  **Execução**: O Use Case correspondente é chamado (ex: `handleIncomingMessage`).
-4.  **Persistência**: O Use Case interage com as interfaces (Repositories), que por baixo usam o Supabase para salvar os dados.
-5.  **Realtime**: O frontend ouve as mudanças no Postgres do Supabase e atualiza a interface via **Zustand**.
+Diferente de CRMs tradicionais, este sistema é **reativo**.
 
----
-
-## 🔐 Multi-tenancy (Isolamento de Dados)
-
-O sistema utiliza um modelo de **Identificador de Tenant** (`tenant_id`).
-
-- Quase todas as tabelas possuem uma coluna `tenant_id`.
-- O backend sempre filtra as operações pelo `tenant_id` do usuário ou conexão atual.
-- A segurança é reforçada no banco de dados via **RLS (Row Level Security)**, garantindo que mesmo se houver um erro no código, um tenant nunca conseguirá ler dados de outro.
+1.  **Subscription**: Ao carregar o Dashboard, as Stores iniciam subscrições via `supabase.channel()`.
+2.  **Mutação**: Quando qualquer parte do sistema (ou a Evolution API via webhook) altera o banco de dados (ex: nova mensagem ou mudança de etapa no pipeline):
+    - O banco de dados emite um evento de mudança.
+    - O listener na Store intercepta o `payload`.
+    - O estado do **Zustand** é atualizado instantaneamente, refletindo na UI sem refresh.
+3.  **Fluxo de Update**: `Database -> Supabase Realtime -> Zustand Store -> React Component`.
 
 ---
 
-## 🧪 Testabilidade
+## 🔐 Multi-tenancy e Segurança (RLS)
 
-Graças ao desacoplamento via interfaces, podemos testar os **Use Cases** sem tocar no banco de dados, injetando "Mocks" dos repositórios e serviços. Isso garante que os testes sejam extremamente rápidos e rodem em milissegundos.
+O isolamento é garantido em duas frentes:
+1.  **Código**: Todas as queries nos repositórios incluem `.match({ tenant_id })`.
+2.  **Banco (RLS)**: Existe uma camada de segurança no Supabase (Row Level Security) que impede que um usuário autenticado acesse registros de outro `tenant_id`, mesmo que tente burlar as chamadas de API.
+
+---
+
+## 🧪 Testabilidade e Manutenibilidade
+
+- **Desacoplamento**: O Frontend não sabe que está usando Supabase; ele interage com as interfaces de Repositório fornecidas pelo `infrastructure/repositories`.
+- **Mocks**: Para testes de interface ou lógica de negócio, as implementações do Supabase podem ser trocadas por repositórios "In-memory" (Mocks) sem alterar uma única linha de código nos componentes React.

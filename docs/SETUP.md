@@ -2,6 +2,8 @@
 
 Siga os passos abaixo para configurar o ambiente de desenvolvimento local e conectar ao Supabase.
 
+---
+
 ## 📋 Pré-requisitos
 
 - **Node.js** (v18 ou superior)
@@ -13,75 +15,89 @@ Siga os passos abaixo para configurar o ambiente de desenvolvimento local e cone
 
 ## 1. ⚙️ Configuração do Supabase
 
-### Tabelas e Schema
-Crie as tabelas seguindo a estrutura de `tenant_id`. Você pode encontrar os scripts de criação de tabelas e RLS em [docs/RLS.md](docs/RLS.md).
+### Banco de Dados (Schema)
+O projeto utiliza um esquema relacional pronto para multi-tenancy.
+1. Acesse o **SQL Editor** do seu projeto no Supabase.
+2. Copie e execute o conteúdo do arquivo localizado em:
+   [backend/supabase/migrations/001_initial_schema.sql](backend/supabase/migrations/001_initial_schema.sql)
+   - *Este script criará todas as tabelas, índices, funções de RLS e políticas de segurança.*
 
 ### Storage (Buckets)
-Crie um bucket público chamado `media-messages` no Storage do Supabase. Este bucket será usado para salvar imagens, áudios e vídeos recebidos via WhatsApp.
+Crie um bucket chamado `media-messages` no menu Storage.
+- **Configuração**: Marque como Público (Public) para que os links de mídia funcionem nas conversas.
 
 ---
 
 ## 2. 📝 Variáveis de Ambiente
 
-Crie um arquivo `.env` na raiz do projeto com as seguintes variáveis:
+Crie um arquivo `.env` na raiz do projeto. Abaixo estão as variáveis obrigatórias:
 
 ```bash
-# Supabase (Frontend e Backend Admin)
-NEXT_PUBLIC_SUPABASE_URL=seu_url_supabase
-NEXT_PUBLIC_SUPABASE_ANON_KEY=seu_anon_key
-SUPABASE_SERVICE_ROLE_KEY=seu_service_role_key # Necessário para Webhooks
+# ============================================================
+# SUPABASE
+# ============================================================
+NEXT_PUBLIC_SUPABASE_URL=https://seu-projeto.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sua-anon-key
+SUPABASE_SERVICE_ROLE_KEY=sua-service-role-key # Usado em webhooks/admin
 
-# WhatsApp (Meta)
-META_APP_ID=seu_app_id
-META_SECRET=seu_secret_verify_token
+# ============================================================
+# META WHATSAPP (Opcional se usar apenas Evolution)
+# ============================================================
+META_APP_SECRET=seu-app-secret
+META_VERIFY_TOKEN=seu-verify-token
 
-# Evolution API (Global)
-EVOLUTION_API_URL=http://localhost:8080 # Exemplo de URL local
-EVOLUTION_API_KEY=apikey_gerada_na_evolution
+# ============================================================
+# AI (Agentes)
+# ============================================================
+# Estas chaves servem como fallback caso o cliente (tenant)
+# não configure uma chave própria no banco de dados.
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
 
-# Outros
-BASE_URL=http://localhost:3000 # Para callbacks e redirecionamentos
+# ============================================================
+# EVOLUTION API
+# ============================================================
+EVOLUTION_API_URL=http://localhost:8080
+EVOLUTION_API_KEY=apikey-gerada
 ```
 
 ---
 
 ## 3. 🏗️ Instalação Local
 
-```bash
-# Instalar dependências
-npm install
+1. Instale as dependências:
+   ```bash
+   npm install
+   ```
 
-# Rodar em desenvolvimento
-npm run dev
-```
+2. Inicie o servidor de desenvolvimento:
+   ```bash
+   npm run dev
+   ```
+   - O sistema estará disponível em `http://localhost:3000`.
 
 ---
 
-## 4. 🔗 Configuração dos Webhooks (Local)
+## 4. 🔗 Configuração de Webhooks
 
-Para testar o recebimento de mensagens localmente, você precisará de um túnel HTTP (como **Ngrok** ou **Localtunnel**).
+Para que o CRM receba mensagens em tempo real, os parceiros (Evolution/Meta) precisam enviar dados para os seus endpoints.
 
-1.  Inicie o túnel: `ngrok http 3000`
-2.  Copie a URL gerada (ex: `https://abcd-123.ngrok.io`)
-3.  No painel da **Evolution API**, configure o Webhook global:
-    - **URL**: `https://abcd-123.ngrok.io/api/evolution/webhook`
-    - **Eventos**: `MESSAGES_UPSERT`, `MESSAGES_UPDATE`
-4.  No painel da **Meta (Facebook Developers)**, configure o Webhook:
-    - **URL**: `https://abcd-123.ngrok.io/api/whatsapp/webhook`
+### Endpoints Disponíveis:
+- **Evolution API**: `[URL_BASE]/api/evolution/webhook`
+- **WhatsApp Webhook**: `[URL_BASE]/api/whatsapp/webhook`
+
+*Dica: Use Ngrok ou Cloudflare Tunnel para expor seu `localhost:3000` durante o desenvolvimento.*
 
 ---
 
 ## 🧪 Rodando Testes
 
-O projeto utiliza **Vitest** para testes automatizados.
+O projeto utiliza **Vitest** para garantir a estabilidade das regras de negócio.
 
 ```bash
 # Rodar todos os testes
 npm test
 
-# Rodar testes em modo watch
+# Modo Watch
 npm run test:watch
-
-# Rodar cobertura de testes
-npm run test:coverage
 ```

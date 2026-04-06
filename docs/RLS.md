@@ -1,74 +1,57 @@
-# 🔐 Guia de Segurança e RLS (Row Level Security)
+# 🔐 Row Level Security (RLS) e Isolamento de Dados
 
-Para garantir o isolamento de dados no CRM, o Supabase utiliza **Row Level Security (RLS)**. Isso garante que cada usuário ou organização só possa ver e editar seus próprios dados.
-
-## 🛡️ Ativar RLS em Todas as Tabelas
-
-Você deve executar os comandos abaixo no **SQL Editor** do Supabase para ativar o RLS em todas as tabelas:
-
-```sql
--- Ativar RLS
-ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tenants ENABLE ROW LEVEL SECURITY;
-ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
-ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE connections ENABLE ROW LEVEL SECURITY;
-ALTER TABLE agents ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tags ENABLE ROW LEVEL SECURITY;
-```
+O sistema utiliza **Row Level Security (RLS)** nativo do PostgreSQL (via Supabase) como a camada definitiva de segurança para garantir o isolamento total entre múltiplos tenants (empresas).
 
 ---
 
-## 📜 Políticas de Segurança (Exemplo)
+## 🏗️ Como Funciona o Isolamento
 
-Execute estas políticas para garantir que o isolamento por `tenant_id` funcione:
+O isolamento baseia-se em informações contidas no **JWT (JSON Web Token)** do usuário autenticado. Duas funções auxiliares extraem esses metadados:
 
-### 1. 📂 `profiles` (Perfis de Usuário)
-```sql
-CREATE POLICY "Users can view their own profile" 
-ON profiles FOR SELECT 
-USING (auth.uid() = id);
-
-CREATE POLICY "Users can update their own profile" 
-ON profiles FOR UPDATE 
-USING (auth.uid() = id);
-```
-
-### 2. 📂 `leads` (Leads do CRM)
-```sql
-CREATE POLICY "Tenant Leads access" 
-ON leads FOR ALL 
-USING (
-  tenant_id = (SELECT tenant_id FROM profiles WHERE id = auth.uid())
-);
-```
-
-### 3. 📂 `messages` (Mensagens de Chat)
-```sql
-CREATE POLICY "Tenant Messages access" 
-ON messages FOR ALL 
-USING (
-  tenant_id = (SELECT tenant_id FROM profiles WHERE id = auth.uid())
-);
-```
+1.  **`auth.tenant_id()`**: Extrai o UUID da empresa (`tenant_id`) de `auth.jwt() -> 'app_metadata'`.
+2.  **`auth.user_role()`**: Extrai o nível de acesso (`role`) do usuário (`owner`, `client` ou `user`).
 
 ---
 
-## 🏗️ Backend e Webhooks (`service_role`)
+## 📜 Políticas de Acesso por Tabela
 
-Algumas operações (como o recebimento de webhooks do WhatsApp) são feitas pelo backend administrativo e precisam de acesso a todas as tabelas.
+Quase todas as tabelas possuem a coluna `tenant_id`. Abaixo estão as regras aplicadas:
 
-Para isso, o backend deve utilizar a **SUPABASE_SERVICE_ROLE_KEY**. Esta chave ignora as políticas de RLS e deve ser usada **apenas em código do servidor** (Backend API Routes).
+### 1. Governança Global (`owner`)
+Usuários com o papel de **Owner** (administradores do SaaS) possuem acesso total (`FOR ALL`) a todas as tabelas, permitindo suporte técnico e gestão da infraestrutura.
 
-### 🚨 Segurança Importante:
-- **NUNCA** use a `service_role_key` no frontend.
-- O frontend deve usar apenas a `anon_key`, respeitando o RLS.
+### 2. Gestão de Clientes (`tenants`)
+- **Administrador SaaS**: Acesso total.
+- **Tenant**: Pode apenas ler seus próprios dados (`id = auth.tenant_id()`).
+
+### 3. Gestão de Equipe (`profiles`)
+- **Administrador do Tenant (`client`)**: Pode criar, editar e desativar usuários da sua própria empresa.
+- **Usuário Padrão (`user`)**: Pode apenas ler os nomes e avatares dos colegas de equipe.
+
+### 4. Dados Operacionais (`leads`, `messages`, `conversations`, etc.)
+- **Acesso Total por Tenant**: Qualquer usuário autenticado tem acesso total aos dados de sua empresa, desde que o `tenant_id` do registro coincida com o de seu JWT.
+- **Filtro Nativo**:
+  ```sql
+  USING (tenant_id = auth.tenant_id())
+  WITH CHECK (tenant_id = auth.tenant_id())
+  ```
+
+### 5. Tabelas de Ligação (`lead_tags`)
+Para tabelas que não possuem `tenant_id` direto, o sistema utiliza subqueries para validar a posse:
+- **Regra**: Só é possível vincular uma tag a um lead se o lead pertencer ao mesmo `tenant_id` do usuário.
 
 ---
 
-## ✅ Checklist de Segurança
+## 🚀 Realtime Seguro
 
-1.  [ ] Conferiu se o RLS está **ENABLE** no Dashboard do Supabase.
-2.  [ ] Validou que as políticas de SELECT/UPDATE/INSERT usam o `auth.uid()` ou o `tenant_id` do perfil.
-3.  [ ] Testou efetuar login com dois usuários de tenants diferentes e garantiu que um não vê os dados do outro.
+O Supabase Realtime respeita rigorosamente as políticas de RLS.
+- Quando uma mensagem é enviada, apenas os usuários que possuem permissão de `SELECT` (ou seja, pertencem ao mesmo tenant) receberão o broadcast via WebSocket.
+- O canal `supabase_realtime` está habilitado especificamente para as tabelas de `messages` e `conversations`.
+
+---
+
+## 🛠️ Auditoria e Erros
+
+Caso um usuário tente acessar o ID de um lead de outra empresa via URL ou API:
+- O banco de dados retornará um resultado vazio ou erro de permissão.
+- Isso garante que, mesmo que a camada de aplicação falhe em filtrar por `tenant_id`, o banco de dados bloqueará o vazamento de informações.
