@@ -155,7 +155,7 @@ docs/                         # documentação complementar
 - `tenants.plan`: `basic | professional | enterprise`
 
 ### Funções especiais
-- `auth.tenant_id()` e `auth.user_role()` para políticas RLS baseadas em JWT.
+- `public.jwt_tenant_id()` e `public.jwt_user_role()` para políticas RLS baseadas em JWT.
 - Trigger `update_updated_at()` para manter `leads.updated_at`.
 
 ### Políticas RLS

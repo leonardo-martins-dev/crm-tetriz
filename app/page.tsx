@@ -15,26 +15,31 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isShaking, setIsShaking] = useState(false)
-  const { login, isLoading } = useAuthStore()
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const { login } = useAuthStore()
   const router = useRouter()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (isLoading) return
+    if (isSubmitting) return
     setError('')
-    
-    const { user: loggedUser, error: loginError } = await login(email, password)
-    
-    if (loggedUser) {
-      if (loggedUser.role === 'owner') {
-        router.push('/admin/clients')
+    setIsSubmitting(true)
+    try {
+      const { user: loggedUser, error: loginError } = await login(email, password)
+
+      if (loggedUser) {
+        if (loggedUser.role === 'owner') {
+          router.push('/admin/clients')
+        } else {
+          router.push('/dashboard/inbox')
+        }
       } else {
-        router.push('/dashboard/inbox')
+        setError(loginError || 'Email ou senha inválidos')
+        setIsShaking(true)
+        setTimeout(() => setIsShaking(false), 500)
       }
-    } else {
-      setError(loginError || 'Email ou senha inválidos')
-      setIsShaking(true)
-      setTimeout(() => setIsShaking(false), 500)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -67,7 +72,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                disabled={isLoading}
+                disabled={isSubmitting}
               />
             </div>
             <div className="space-y-2">
@@ -81,7 +86,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                disabled={isLoading}
+                disabled={isSubmitting}
               />
             </div>
             {error && (
@@ -93,9 +98,9 @@ export default function LoginPage() {
             <Button 
               type="submit" 
               className="w-full relative overflow-hidden group" 
-              disabled={isLoading}
+              disabled={isSubmitting}
             >
-              {isLoading ? (
+              {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Entrando...

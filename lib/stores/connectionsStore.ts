@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { useAuthStore } from '@/lib/stores/authStore'
 import { getConnectionRepository } from '@/infrastructure/repositories'
+import { ConnectionStatus } from '@/backend/domain/enums'
 
 export type ConnectionProvider = 'meta' | 'evolution'
 export type ConnectionType = 'whatsapp'
@@ -32,7 +33,8 @@ interface ConnectionsState {
   updateConnection: (id: string, updates: Partial<Connection>) => Promise<void>
   getConnection: (id: string) => Connection | undefined
   getActiveConnection: () => Connection | undefined
-  connectEvolution: (instanceName: string, evolutionApiKey: string) => Promise<void>
+  connectEvolution: (instanceName: string, evolutionApiKey?: string) => Promise<void>
+  ensureConnectionSlot: (provider: ConnectionProvider) => Promise<Connection | null>
   disconnectProvider: (id: string) => Promise<void>
 }
 
@@ -117,11 +119,40 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
     await get().updateConnection(conn.id, {
       connected: true,
       instanceName,
-      evolutionApiKey,
+      ...(evolutionApiKey !== undefined ? { evolutionApiKey } : {}),
       connectedAt: new Date().toISOString(),
       accountName: instanceName,
       lastSync: new Date().toISOString(),
     })
+  },
+
+  ensureConnectionSlot: async (provider) => {
+    const tenantId = useAuthStore.getState().user?.tenantId
+    if (!tenantId) return null
+
+    await get().fetchConnections()
+    const existing = get().connections.find((c) => c.provider === provider)
+    if (existing) return existing
+
+    try {
+      await connectionRepo.create({
+        tenantId,
+        provider,
+        status: ConnectionStatus.INACTIVE,
+        phoneNumberId: `pending-${provider}-${tenantId}`,
+        wabaId: '',
+        accessTokenEncrypted: 'pending',
+        verifyToken: '',
+      })
+    } catch (err) {
+      console.error('ensureConnectionSlot create:', err)
+      await get().fetchConnections()
+      const retry = get().connections.find((c) => c.provider === provider)
+      return retry ?? null
+    }
+
+    await get().fetchConnections()
+    return get().connections.find((c) => c.provider === provider) ?? null
   },
 
   disconnectProvider: async (id) => {

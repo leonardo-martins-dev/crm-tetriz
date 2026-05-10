@@ -21,7 +21,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   client: null,
   isAuthenticated: false,
-  isLoading: true,
+  // false no boot: telas como `/` não chamam refreshUser(); true inicial deixava login preso em "carregando"
+  isLoading: false,
 
   login: async (email: string, password: string) => {
     set({ isLoading: true })

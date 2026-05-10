@@ -8,8 +8,10 @@ O sistema utiliza **Row Level Security (RLS)** nativo do PostgreSQL (via Supabas
 
 O isolamento baseia-se em informações contidas no **JWT (JSON Web Token)** do usuário autenticado. Duas funções auxiliares extraem esses metadados:
 
-1.  **`auth.tenant_id()`**: Extrai o UUID da empresa (`tenant_id`) de `auth.jwt() -> 'app_metadata'`.
-2.  **`auth.user_role()`**: Extrai o nível de acesso (`role`) do usuário (`owner`, `client` ou `user`).
+1.  **`public.jwt_tenant_id()`**: Extrai o UUID da empresa (`tenant_id`) de `auth.jwt() -> 'app_metadata'`.
+2.  **`public.jwt_user_role()`**: Extrai o nível de acesso (`role`) do usuário (`owner`, `client` ou `user`).
+
+> No Supabase hospedado não é permitido criar funções no schema `auth`; por isso os helpers ficam em `public` (ver migração SQL).
 
 ---
 
@@ -22,7 +24,7 @@ Usuários com o papel de **Owner** (administradores do SaaS) possuem acesso tota
 
 ### 2. Gestão de Clientes (`tenants`)
 - **Administrador SaaS**: Acesso total.
-- **Tenant**: Pode apenas ler seus próprios dados (`id = auth.tenant_id()`).
+- **Tenant**: Pode apenas ler seus próprios dados (`id = public.jwt_tenant_id()`).
 
 ### 3. Gestão de Equipe (`profiles`)
 - **Administrador do Tenant (`client`)**: Pode criar, editar e desativar usuários da sua própria empresa.
@@ -32,8 +34,8 @@ Usuários com o papel de **Owner** (administradores do SaaS) possuem acesso tota
 - **Acesso Total por Tenant**: Qualquer usuário autenticado tem acesso total aos dados de sua empresa, desde que o `tenant_id` do registro coincida com o de seu JWT.
 - **Filtro Nativo**:
   ```sql
-  USING (tenant_id = auth.tenant_id())
-  WITH CHECK (tenant_id = auth.tenant_id())
+  USING (tenant_id = public.jwt_tenant_id())
+  WITH CHECK (tenant_id = public.jwt_tenant_id())
   ```
 
 ### 5. Tabelas de Ligação (`lead_tags`)

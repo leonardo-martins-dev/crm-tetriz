@@ -10,21 +10,33 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- ============================================================
 -- 2. Funções helper para RLS (extraem dados do JWT)
 -- ============================================================
-CREATE OR REPLACE FUNCTION auth.tenant_id()
-RETURNS uuid AS $$
+-- Supabase hospedado (Dashboard SQL) não permite CREATE no schema `auth`.
+-- Helpers ficam em `public`; continuam usando auth.jwt() internamente.
+CREATE OR REPLACE FUNCTION public.jwt_tenant_id()
+RETURNS uuid
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = ''
+AS $$
   SELECT COALESCE(
     (auth.jwt() -> 'app_metadata' ->> 'tenant_id')::uuid,
     '00000000-0000-0000-0000-000000000000'::uuid
   );
-$$ LANGUAGE sql STABLE;
+$$;
 
-CREATE OR REPLACE FUNCTION auth.user_role()
-RETURNS text AS $$
+CREATE OR REPLACE FUNCTION public.jwt_user_role()
+RETURNS text
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = ''
+AS $$
   SELECT COALESCE(
     auth.jwt() -> 'app_metadata' ->> 'role',
     'user'
   );
-$$ LANGUAGE sql STABLE;
+$$;
 
 -- ============================================================
 -- 3. TABELAS
@@ -237,150 +249,150 @@ CREATE TRIGGER leads_updated_at
 ALTER TABLE tenants ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "owner_full_access_tenants" ON tenants
-  FOR ALL USING (auth.user_role() = 'owner')
-  WITH CHECK (auth.user_role() = 'owner');
+  FOR ALL USING (public.jwt_user_role() = 'owner')
+  WITH CHECK (public.jwt_user_role() = 'owner');
 
 CREATE POLICY "tenant_reads_own" ON tenants
-  FOR SELECT USING (id = auth.tenant_id());
+  FOR SELECT USING (id = public.jwt_tenant_id());
 
 -- ── PROFILES ─────────────────────────────────────
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "owner_full_access_profiles" ON profiles
-  FOR ALL USING (auth.user_role() = 'owner')
-  WITH CHECK (auth.user_role() = 'owner');
+  FOR ALL USING (public.jwt_user_role() = 'owner')
+  WITH CHECK (public.jwt_user_role() = 'owner');
 
 CREATE POLICY "client_manages_tenant_profiles" ON profiles
   FOR ALL
-  USING (tenant_id = auth.tenant_id() AND auth.user_role() = 'client')
-  WITH CHECK (tenant_id = auth.tenant_id() AND auth.user_role() = 'client');
+  USING (tenant_id = public.jwt_tenant_id() AND public.jwt_user_role() = 'client')
+  WITH CHECK (tenant_id = public.jwt_tenant_id() AND public.jwt_user_role() = 'client');
 
 CREATE POLICY "user_reads_tenant_profiles" ON profiles
-  FOR SELECT USING (tenant_id = auth.tenant_id());
+  FOR SELECT USING (tenant_id = public.jwt_tenant_id());
 
 -- ── LEADS ────────────────────────────────────────
 ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "owner_full_access_leads" ON leads
-  FOR ALL USING (auth.user_role() = 'owner')
-  WITH CHECK (auth.user_role() = 'owner');
+  FOR ALL USING (public.jwt_user_role() = 'owner')
+  WITH CHECK (public.jwt_user_role() = 'owner');
 
 CREATE POLICY "tenant_access_leads" ON leads
   FOR ALL
-  USING (tenant_id = auth.tenant_id())
-  WITH CHECK (tenant_id = auth.tenant_id());
+  USING (tenant_id = public.jwt_tenant_id())
+  WITH CHECK (tenant_id = public.jwt_tenant_id());
 
 -- ── CONVERSATIONS ────────────────────────────────
 ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "owner_full_access_conversations" ON conversations
-  FOR ALL USING (auth.user_role() = 'owner')
-  WITH CHECK (auth.user_role() = 'owner');
+  FOR ALL USING (public.jwt_user_role() = 'owner')
+  WITH CHECK (public.jwt_user_role() = 'owner');
 
 CREATE POLICY "tenant_access_conversations" ON conversations
   FOR ALL
-  USING (tenant_id = auth.tenant_id())
-  WITH CHECK (tenant_id = auth.tenant_id());
+  USING (tenant_id = public.jwt_tenant_id())
+  WITH CHECK (tenant_id = public.jwt_tenant_id());
 
 -- ── MESSAGES ─────────────────────────────────────
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "owner_full_access_messages" ON messages
-  FOR ALL USING (auth.user_role() = 'owner')
-  WITH CHECK (auth.user_role() = 'owner');
+  FOR ALL USING (public.jwt_user_role() = 'owner')
+  WITH CHECK (public.jwt_user_role() = 'owner');
 
 CREATE POLICY "tenant_access_messages" ON messages
   FOR ALL
-  USING (tenant_id = auth.tenant_id())
-  WITH CHECK (tenant_id = auth.tenant_id());
+  USING (tenant_id = public.jwt_tenant_id())
+  WITH CHECK (tenant_id = public.jwt_tenant_id());
 
 -- ── PIPELINE_STAGES ──────────────────────────────
 ALTER TABLE pipeline_stages ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "owner_full_access_pipeline_stages" ON pipeline_stages
-  FOR ALL USING (auth.user_role() = 'owner')
-  WITH CHECK (auth.user_role() = 'owner');
+  FOR ALL USING (public.jwt_user_role() = 'owner')
+  WITH CHECK (public.jwt_user_role() = 'owner');
 
 CREATE POLICY "tenant_access_pipeline_stages" ON pipeline_stages
   FOR ALL
-  USING (tenant_id = auth.tenant_id())
-  WITH CHECK (tenant_id = auth.tenant_id());
+  USING (tenant_id = public.jwt_tenant_id())
+  WITH CHECK (tenant_id = public.jwt_tenant_id());
 
 -- ── TAGS ─────────────────────────────────────────
 ALTER TABLE tags ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "owner_full_access_tags" ON tags
-  FOR ALL USING (auth.user_role() = 'owner')
-  WITH CHECK (auth.user_role() = 'owner');
+  FOR ALL USING (public.jwt_user_role() = 'owner')
+  WITH CHECK (public.jwt_user_role() = 'owner');
 
 CREATE POLICY "tenant_access_tags" ON tags
   FOR ALL
-  USING (tenant_id = auth.tenant_id())
-  WITH CHECK (tenant_id = auth.tenant_id());
+  USING (tenant_id = public.jwt_tenant_id())
+  WITH CHECK (tenant_id = public.jwt_tenant_id());
 
 -- ── LEAD_TAGS ────────────────────────────────────
 ALTER TABLE lead_tags ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "owner_full_access_lead_tags" ON lead_tags
-  FOR ALL USING (auth.user_role() = 'owner')
-  WITH CHECK (auth.user_role() = 'owner');
+  FOR ALL USING (public.jwt_user_role() = 'owner')
+  WITH CHECK (public.jwt_user_role() = 'owner');
 
 CREATE POLICY "tenant_access_lead_tags" ON lead_tags
   FOR ALL
   USING (
-    EXISTS (SELECT 1 FROM leads WHERE leads.id = lead_tags.lead_id AND leads.tenant_id = auth.tenant_id())
+    EXISTS (SELECT 1 FROM leads WHERE leads.id = lead_tags.lead_id AND leads.tenant_id = public.jwt_tenant_id())
   )
   WITH CHECK (
-    EXISTS (SELECT 1 FROM leads WHERE leads.id = lead_tags.lead_id AND leads.tenant_id = auth.tenant_id())
+    EXISTS (SELECT 1 FROM leads WHERE leads.id = lead_tags.lead_id AND leads.tenant_id = public.jwt_tenant_id())
   );
 
 -- ── AGENTS ───────────────────────────────────────
 ALTER TABLE agents ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "owner_full_access_agents" ON agents
-  FOR ALL USING (auth.user_role() = 'owner')
-  WITH CHECK (auth.user_role() = 'owner');
+  FOR ALL USING (public.jwt_user_role() = 'owner')
+  WITH CHECK (public.jwt_user_role() = 'owner');
 
 CREATE POLICY "tenant_access_agents" ON agents
   FOR ALL
-  USING (tenant_id = auth.tenant_id())
-  WITH CHECK (tenant_id = auth.tenant_id());
+  USING (tenant_id = public.jwt_tenant_id())
+  WITH CHECK (tenant_id = public.jwt_tenant_id());
 
 -- ── CONNECTIONS ──────────────────────────────────
 ALTER TABLE connections ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "owner_full_access_connections" ON connections
-  FOR ALL USING (auth.user_role() = 'owner')
-  WITH CHECK (auth.user_role() = 'owner');
+  FOR ALL USING (public.jwt_user_role() = 'owner')
+  WITH CHECK (public.jwt_user_role() = 'owner');
 
 CREATE POLICY "tenant_access_connections" ON connections
   FOR ALL
-  USING (tenant_id = auth.tenant_id())
-  WITH CHECK (tenant_id = auth.tenant_id());
+  USING (tenant_id = public.jwt_tenant_id())
+  WITH CHECK (tenant_id = public.jwt_tenant_id());
 
 -- ── BROADCASTS ───────────────────────────────────
 ALTER TABLE broadcasts ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "owner_full_access_broadcasts" ON broadcasts
-  FOR ALL USING (auth.user_role() = 'owner')
-  WITH CHECK (auth.user_role() = 'owner');
+  FOR ALL USING (public.jwt_user_role() = 'owner')
+  WITH CHECK (public.jwt_user_role() = 'owner');
 
 CREATE POLICY "tenant_access_broadcasts" ON broadcasts
   FOR ALL
-  USING (tenant_id = auth.tenant_id())
-  WITH CHECK (tenant_id = auth.tenant_id());
+  USING (tenant_id = public.jwt_tenant_id())
+  WITH CHECK (tenant_id = public.jwt_tenant_id());
 
 -- ── AUTOMATIONS ──────────────────────────────────
 ALTER TABLE automations ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "owner_full_access_automations" ON automations
-  FOR ALL USING (auth.user_role() = 'owner')
-  WITH CHECK (auth.user_role() = 'owner');
+  FOR ALL USING (public.jwt_user_role() = 'owner')
+  WITH CHECK (public.jwt_user_role() = 'owner');
 
 CREATE POLICY "tenant_access_automations" ON automations
   FOR ALL
-  USING (tenant_id = auth.tenant_id())
-  WITH CHECK (tenant_id = auth.tenant_id());
+  USING (tenant_id = public.jwt_tenant_id())
+  WITH CHECK (tenant_id = public.jwt_tenant_id());
 
 -- ============================================================
 -- 6. Habilitar Realtime para mensagens e conversas

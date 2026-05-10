@@ -1,3 +1,5 @@
+'use client'
+
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/lib/stores/authStore'
 import { useClientsStore, AVAILABLE_MODULES } from '@/lib/stores/clientsStore'

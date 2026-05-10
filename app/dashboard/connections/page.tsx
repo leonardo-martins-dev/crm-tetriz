@@ -1,63 +1,88 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useConnectionsStore, ConnectionProvider, Connection } from '@/lib/stores/connectionsStore'
+import { useState, useEffect, useMemo } from 'react'
+import { useConnectionsStore, Connection } from '@/lib/stores/connectionsStore'
+import { useAuthStore } from '@/lib/stores/authStore'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Check, X, RefreshCw, QrCode } from 'lucide-react'
-import { WhatsAppIcon } from '@/components/WhatsAppIcon'
 import { WhatsAppQrModal } from '@/components/WhatsAppQrModal'
 
+const PROVIDERS = ['evolution'] as const
+
 const connectionConfig = {
-  meta: {
-    name: 'WhatsApp Oficial',
-    icon: WhatsAppIcon,
-    color: 'bg-green-600',
-    description: 'Conecte sua conta do WhatsApp via Meta Cloud API. Requer verificação business.',
-    connectLabel: 'Configurar Meta',
-  },
   evolution: {
-    name: 'WhatsApp (QR Code)',
+    name: 'WhatsApp via Evolution API',
     icon: QrCode,
     color: 'bg-blue-500',
-    description: 'Conecte sua conta pessoal ou business escaneando o QR Code na tela.',
+    description:
+      'Conecte escaneando o QR Code. A instância é criada via Evolution API e o webhook recebe as mensagens.',
     connectLabel: 'Conectar com QR',
-  }
-}
+  },
+} as const
 
 export default function ConnectionsPage() {
-  const { connections, disconnectProvider, getActiveConnection, connectEvolution } = useConnectionsStore()
-  
+  const {
+    connections,
+    disconnectProvider,
+    connectEvolution,
+    ensureConnectionSlot,
+    fetchConnections,
+  } = useConnectionsStore()
+  const user = useAuthStore((s) => s.user)
+
   // Modal state
   const [isQrModalOpen, setIsQrModalOpen] = useState(false)
   const [qrBase64, setQrBase64] = useState<string | undefined>()
   const [pairingCode, setPairingCode] = useState<string | undefined>()
   const [currentInstanceName, setCurrentInstanceName] = useState<string | undefined>()
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [isConnecting, setIsConnecting] = useState(false)
 
-  // TODO: Em uma implementação real pegaremos o tenantId do Auth/Session
-  const tenantId = 'tenant-123' 
+  const tenantId = user?.tenantId ?? ''
 
-  const handleConnectProvider = (provider: ConnectionProvider) => {
-    if (provider === 'meta') {
-      alert('Configuração Meta será implementada no futuro.')
+  const displayConnections = useMemo((): Connection[] => {
+    return PROVIDERS.map((provider) => {
+      const row = connections.find((c) => c.provider === provider)
+      if (row) return row
+      return {
+        id: `slot-${provider}`,
+        tenantId,
+        type: 'whatsapp',
+        provider,
+        name: connectionConfig[provider].name,
+        connected: false,
+      }
+    })
+  }, [connections, tenantId])
+
+  useEffect(() => {
+    if (user?.tenantId) fetchConnections()
+  }, [user?.tenantId, fetchConnections])
+
+  const handleConnectEvolution = async () => {
+    const ensured = await ensureConnectionSlot('evolution')
+    if (!ensured) {
+      alert(
+        'Não foi possível criar o registro de conexão Evolution no banco. Verifique permissões (RLS) e o schema da tabela connections.'
+      )
       return
     }
-
-    if (provider === 'evolution') {
-      startEvolutionConnection()
-    }
+    startEvolutionConnection()
   }
 
   const startEvolutionConnection = async () => {
+    if (!tenantId) {
+      alert('Sessão sem tenant. Faça login novamente.')
+      return
+    }
+
     setIsConnecting(true)
     setIsQrModalOpen(true)
     setQrBase64(undefined)
     
     try {
-      const instanceName = `crm-${tenantId}-${Date.now()}`
+      const instanceName = `crm-${tenantId.slice(0, 8)}-${Date.now()}`
       setCurrentInstanceName(instanceName)
       
       const res = await fetch('/api/evolution/create-instance', {
@@ -104,7 +129,7 @@ export default function ConnectionsPage() {
         if (data?.instance?.state === 'open') {
           // Conectado!
           setIsQrModalOpen(false)
-          connectEvolution(currentInstanceName, 'API_KEY_AQUI') 
+          connectEvolution(currentInstanceName)
           // Configura webhook e events na API Real..
           await fetch('/api/evolution/setup-webhook', {
             method: 'POST',
@@ -120,6 +145,7 @@ export default function ConnectionsPage() {
   }, [isQrModalOpen, currentInstanceName, connectEvolution])
 
   const handleDisconnect = async (conn: Connection) => {
+    if (conn.id.startsWith('slot-')) return
     if (!confirm('Tem certeza que deseja desconectar esta conta?')) return
 
     if (conn.provider === 'evolution' && conn.instanceName) {
@@ -136,25 +162,22 @@ export default function ConnectionsPage() {
     alert('Sincronizando...')
   }
 
-  const activeConnection = getActiveConnection()
-
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Conexões</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          Gerencie suas conexões. Apenas um provedor pode estar ativo por vez.
+          WhatsApp via Evolution API — conecte com QR Code.
         </p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {connections.map((connection) => {
+        {displayConnections.map((connection) => {
           const config = connectionConfig[connection.provider]
           const Icon = config.icon
-          const isProviderDisabled = activeConnection && activeConnection.id !== connection.id
 
           return (
-            <Card key={connection.id} className={`relative transition-all border-border/50 overflow-hidden ${isProviderDisabled ? 'opacity-60 grayscale' : 'hover:shadow-md'}`}>
+            <Card key={connection.id} className="relative transition-all border-border/50 overflow-hidden hover:shadow-md">
                <CardHeader className="bg-muted/20 border-b border-border/50 pb-4">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
@@ -216,11 +239,7 @@ export default function ConnectionsPage() {
                     </div>
                   </>
                 ) : (
-                  <Button
-                    className="w-full"
-                    onClick={() => handleConnectProvider(connection.provider)}
-                    disabled={!!isProviderDisabled}
-                  >
+                  <Button className="w-full" onClick={handleConnectEvolution}>
                     <Check className="h-4 w-4 mr-2" />
                     {config.connectLabel}
                   </Button>
@@ -236,7 +255,7 @@ export default function ConnectionsPage() {
         onClose={() => setIsQrModalOpen(false)}
         qrCodeBase64={qrBase64}
         pairingCode={pairingCode}
-        isConnecting={true}
+        isConnecting={isConnecting}
         onRefreshQr={() => currentInstanceName && refreshEvolutionQr(currentInstanceName)}
       />
 
