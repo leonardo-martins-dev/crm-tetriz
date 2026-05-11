@@ -1,8 +1,49 @@
 import { NextResponse } from 'next/server'
+import { parseFetchInstancesBody } from '@/lib/evolution/evolution-instances'
+
+/**
+ * Descobre o UUID da instância na Evolution quando o CRM só tem o nome (instance_id vazio no Supabase).
+ */
+async function resolveInstanceUuidFromEvolution(
+  base: string,
+  apikey: string,
+  instanceName: string
+): Promise<string | null> {
+  const fetchList = async (withNameFilter: boolean): Promise<string | null> => {
+    const controller = new AbortController()
+    const t = setTimeout(() => controller.abort(), 15_000)
+    try {
+      const url = new URL(`${base}/instance/fetchInstances`)
+      if (withNameFilter) url.searchParams.set('instanceName', instanceName)
+      const res = await fetch(url.toString(), {
+        method: 'GET',
+        headers: { apikey },
+        signal: controller.signal,
+      })
+      if (!res.ok) return null
+      const rows = parseFetchInstancesBody(await res.json())
+      const lower = instanceName.toLowerCase()
+      const row =
+        rows.find((r) => r.instanceName === instanceName) ||
+        rows.find((r) => r.instanceName.toLowerCase() === lower)
+      const id = row?.instanceId
+      return typeof id === 'string' && id.length > 0 ? id : null
+    } catch (e) {
+      console.error('[evolution/connect] fetchInstances:', withNameFilter, e)
+      return null
+    } finally {
+      clearTimeout(t)
+    }
+  }
+
+  let id = await fetchList(true)
+  if (!id) id = await fetchList(false)
+  return id
+}
 
 /**
  * GET /instance/connect/{instance} — doc Evolution v2.
- * Alguns servidores devolvem 404 pelo **nome** mas aceitam o **instanceId** (UUID) gravado no CRM.
+ * Retry: nome → instanceId (query) → UUID via fetchInstances (auto).
  */
 export async function GET(req: Request) {
   try {
@@ -26,12 +67,30 @@ export async function GET(req: Request) {
         },
       })
 
+    const tried: string[] = []
     let response = await callEvolution(instanceName)
+    tried.push(instanceName)
+    let connectKeyUsed = instanceName
+
+    const adoptIfOk = (r: Response, key: string) => {
+      if (r.ok) {
+        response = r
+        connectKeyUsed = key
+      }
+    }
 
     if (response.status === 404 && instanceId && instanceId !== instanceName) {
       const second = await callEvolution(instanceId)
-      if (second.ok) {
-        response = second
+      tried.push(instanceId)
+      adoptIfOk(second, instanceId)
+    }
+
+    if (!response.ok && response.status === 404) {
+      const resolved = await resolveInstanceUuidFromEvolution(base, GLOBAL_API_KEY, instanceName)
+      if (resolved && !tried.includes(resolved)) {
+        const third = await callEvolution(resolved)
+        tried.push(resolved)
+        adoptIfOk(third, resolved)
       }
     }
 
@@ -48,7 +107,7 @@ export async function GET(req: Request) {
         {
           error: 'Failed to connect instance',
           details: parsed,
-          tried: instanceId && instanceId !== instanceName ? [instanceName, instanceId] : [instanceName],
+          tried,
         },
         { status: response.status }
       )
@@ -78,6 +137,8 @@ export async function GET(req: Request) {
       ...data,
       base64: rawBase64 || undefined,
       pairingCode: pairingCode || undefined,
+      /** Chave que funcionou no path /instance/connect/ — pode ser UUID; gravar em connections.instance_id */
+      evolutionConnectKeyUsed: connectKeyUsed,
     })
   } catch (error) {
     console.error('Erro na API de conectar instância:', error)

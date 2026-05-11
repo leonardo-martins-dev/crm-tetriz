@@ -380,6 +380,17 @@ export default function ConnectionsPage() {
       }
       if (b64) setQrBase64(b64)
       if (data.pairingCode) setPairingCode(data.pairingCode)
+
+      const keyUsed = data.evolutionConnectKeyUsed
+      const uuidRe =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      if (typeof keyUsed === 'string' && uuidRe.test(keyUsed)) {
+        setCurrentInstanceId(keyUsed)
+        const conn = useConnectionsStore.getState().connections.find((c) => c.provider === 'evolution')
+        if (conn && conn.instanceId !== keyUsed) {
+          await useConnectionsStore.getState().updateConnection(conn.id, { instanceId: keyUsed })
+        }
+      }
     } catch (err) {
       console.error('Falha ao obter novo QR Code:', err)
       alert('Falha de rede ao pedir QR à Evolution.')
