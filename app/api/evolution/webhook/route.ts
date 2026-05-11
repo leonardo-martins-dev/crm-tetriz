@@ -9,6 +9,7 @@ import {
   resolveWebhookInstanceKey,
   splitEvolutionMessagesUpsert,
 } from '@/lib/evolution/normalize-webhook'
+import { evolutionGetBase64FromMediaMessage } from '@/lib/evolution/fetch-media-from-evolution'
 
 function extractLegacyUpsertPayload(body: Record<string, unknown>) {
   const instanceName = resolveWebhookInstanceKey(body)
@@ -77,11 +78,24 @@ export async function POST(req: Request) {
           }
         } else if (msgData.audioMessage) {
           const am = msgData.audioMessage as Record<string, unknown>
+          let audioB64 =
+            typeof msgData.base64 === 'string' && msgData.base64.length > 0
+              ? msgData.base64
+              : undefined
+          let audioMime = String(am.mimetype || 'audio/ogg')
+          if (!audioB64) {
+            const webPayload = data as Record<string, unknown>
+            const fetched = await evolutionGetBase64FromMediaMessage(instanceName, webPayload)
+            if (fetched) {
+              audioB64 = fetched.base64
+              audioMime = fetched.mimetype
+            }
+          }
           media = {
             type: 'audio',
             url: am.url,
-            mimetype: am.mimetype,
-            base64: msgData.base64,
+            mimetype: audioMime,
+            base64: audioB64,
           }
         } else if (msgData.videoMessage) {
           const vm = msgData.videoMessage as Record<string, unknown>

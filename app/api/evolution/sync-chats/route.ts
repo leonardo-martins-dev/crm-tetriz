@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import {
+  evolutionGetBase64FromMediaMessage,
+  fileExtensionForMime,
+} from '@/lib/evolution/fetch-media-from-evolution'
 
 export const dynamic = 'force-dynamic'
 /** Limite de execução no runtime (Vercel; ignorado em Node self-hosted). */
@@ -102,6 +106,7 @@ async function batchInsertEvolutionMessages(
     leadId: string
     phone: string
     contactName: string
+    instanceName: string
     records: Record<string, unknown>[]
   }
 ): Promise<{ inserted: number; latestAt: string | null }> {
@@ -118,6 +123,8 @@ async function batchInsertEvolutionMessages(
     wamid: string
     status: string
     created_at: string
+    media_url?: string
+    media_type?: string
   }
 
   const rows: Row[] = []
@@ -141,7 +148,38 @@ async function batchInsertEvolutionMessages(
 
     const content = textFromEvolutionMessage(record) || '[Mensagem]'
 
-    rows.push({
+    let media_url: string | undefined
+    let media_type: string | undefined
+    const mt = String(record.messageType || '')
+    if (mt === 'audioMessage') {
+      const webPayload = {
+        key: record.key,
+        message: record.message,
+        messageTimestamp: record.messageTimestamp,
+        pushName: record.pushName,
+      }
+      const got = await evolutionGetBase64FromMediaMessage(args.instanceName, webPayload)
+      if (got) {
+        const ext = fileExtensionForMime(got.mimetype)
+        const safeId = wamid.replace(/[^a-zA-Z0-9_-]/g, '_')
+        const path = `${args.tenantId}/${args.leadId}/sync_${safeId}.${ext}`
+        try {
+          const buf = Buffer.from(got.base64, 'base64')
+          const { error: upErr } = await supabase.storage
+            .from('media-messages')
+            .upload(path, buf, { contentType: got.mimetype, upsert: true })
+          if (!upErr) {
+            const { data: pub } = supabase.storage.from('media-messages').getPublicUrl(path)
+            media_url = pub.publicUrl
+            media_type = 'audio'
+          }
+        } catch (e) {
+          console.warn('[sync-chats] audio upload', wamid, e)
+        }
+      }
+    }
+
+    const row: Row = {
       tenant_id: args.tenantId,
       conversation_id: args.conversationId,
       lead_id: args.leadId,
@@ -154,7 +192,12 @@ async function batchInsertEvolutionMessages(
       wamid,
       status: 'delivered',
       created_at: createdAt,
-    })
+    }
+    if (media_url) {
+      row.media_url = media_url
+      row.media_type = media_type
+    }
+    rows.push(row)
   }
 
   if (rows.length === 0) return { inserted: 0, latestAt: null }
@@ -403,6 +446,7 @@ export async function POST(req: Request) {
         leadId,
         phone,
         contactName: name,
+        instanceName,
         records: evMessages,
       })
       messagesInserted += nMsg

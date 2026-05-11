@@ -140,9 +140,10 @@ export default function InboxPage() {
         )
       case 'audio':
         return (
-          <div className="mt-2 min-w-[200px]">
-            <audio controls className="h-8 w-full">
-              <source src={message.mediaUrl} type="audio/mpeg" />
+          <div className="mt-2 flex min-w-[220px] max-w-md items-center gap-2 rounded-md bg-black/10 px-2 py-1.5 dark:bg-white/10">
+            <Music className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+            <audio controls className="h-9 w-full" preload="metadata">
+              <source src={message.mediaUrl} />
             </audio>
           </div>
         )
