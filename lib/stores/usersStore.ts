@@ -7,7 +7,7 @@ interface UsersState {
   users: User[]
   isLoading: boolean
   fetchUsers: () => Promise<void>
-  addUser: (user: Omit<User, 'id' | 'active'>) => Promise<void>
+  addUser: (user: Omit<User, 'id' | 'active'> & { password: string }) => Promise<void>
   updateUser: (id: string, updates: Partial<User>) => Promise<void>
   toggleUserActive: (id: string) => Promise<void>
   deleteUser: (id: string) => Promise<void>
@@ -33,6 +33,7 @@ export const useUsersStore = create<UsersState>((set, get) => ({
         email: profile.email,
         role: profile.role as UserRole,
         avatar: profile.avatarUrl,
+        clientId: profile.tenantId,
         tenantId: profile.tenantId,
         active: profile.active,
       }))
@@ -45,8 +46,32 @@ export const useUsersStore = create<UsersState>((set, get) => ({
   },
 
   addUser: async (userData) => {
-    // Implementação via Edge Function ou Invites no futuro
-    console.warn('addUser real deve ser implementado via Edge Function para criar o Auth User')
+    try {
+      const tenantId = userData.clientId || userData.tenantId
+      if (!tenantId) throw new Error('Cliente (tenant) é obrigatório')
+      if (!userData.password || userData.password.length < 6) {
+        throw new Error('Senha deve ter ao menos 6 caracteres')
+      }
+
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId,
+          name: userData.name,
+          email: userData.email,
+          role: userData.role,
+          password: userData.password,
+          active: userData.active ?? true,
+        }),
+      })
+      const body = await res.json()
+      if (!res.ok) throw new Error(body.error || 'Falha ao criar usuário')
+      await get().fetchUsers()
+    } catch (err) {
+      console.error('Erro ao criar usuário:', err)
+      throw err
+    }
   },
 
   updateUser: async (id, updates) => {

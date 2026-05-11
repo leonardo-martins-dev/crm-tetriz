@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -14,17 +14,24 @@ import { defaultTenantConfig } from '@/config/tenant'
 
 export default function AdminUsersPage() {
   const { clients } = useClientsStore()
-  const { users, addUser, updateUser, toggleUserActive } = useUsersStore()
+  const { users, addUser, updateUser, toggleUserActive, fetchUsers } = useUsersStore()
+  const { fetchClients } = useClientsStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    password: '',
     role: 'user' as UserRole,
     clientId: '',
     active: true,
   })
+
+  useEffect(() => {
+    fetchUsers()
+    fetchClients()
+  }, [fetchUsers, fetchClients])
 
   const filteredUsers = users.filter((user) =>
     user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -51,6 +58,7 @@ export default function AdminUsersPage() {
       setFormData({
         name: user.name,
         email: user.email,
+        password: '',
         role: user.role,
         clientId: user.clientId || '',
         active: user.active,
@@ -60,6 +68,7 @@ export default function AdminUsersPage() {
       setFormData({
         name: '',
         email: '',
+        password: '',
         role: 'user',
         clientId: '',
         active: true,
@@ -74,30 +83,42 @@ export default function AdminUsersPage() {
     setFormData({
       name: '',
       email: '',
+      password: '',
       role: 'user',
       clientId: '',
       active: true,
     })
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    if (editingUser) {
-      // Editar usuário existente
-      updateUser(editingUser.id, formData)
-    } else {
-      // Criar novo usuário
-      addUser({
-        name: formData.name,
-        email: formData.email,
-        role: formData.role,
-        clientId: formData.clientId || undefined,
-        active: formData.active,
-      })
+
+    try {
+      if (editingUser) {
+        // Editar usuário existente
+        await updateUser(editingUser.id, {
+          name: formData.name,
+          email: formData.email,
+          role: formData.role,
+          clientId: formData.clientId || undefined,
+          active: formData.active,
+        })
+      } else {
+        // Criar novo usuário
+        await addUser({
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+          role: formData.role,
+          clientId: formData.clientId || undefined,
+          active: formData.active,
+        })
+      }
+      handleCloseModal()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Falha ao salvar usuário'
+      alert(message)
     }
-    
-    handleCloseModal()
   }
 
   const handleToggleActive = (userId: string) => {
@@ -236,6 +257,23 @@ export default function AdminUsersPage() {
               required
             />
           </div>
+
+          {!editingUser && (
+            <div className="space-y-2">
+              <label htmlFor="password" className="text-sm font-medium">
+                Senha *
+              </label>
+              <Input
+                id="password"
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                placeholder="Mínimo 6 caracteres"
+                minLength={6}
+                required
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <label htmlFor="role" className="text-sm font-medium">
