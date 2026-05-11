@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
+/** Limite de execução no runtime (Vercel; ignorado em Node self-hosted). */
+export const maxDuration = 300
 
 /** Últimas N conversas com atividade no período. */
 const SYNC_RECENT_CHATS = 20
@@ -90,7 +92,9 @@ async function evolutionFetchMessages(
   })
 }
 
-async function insertOneEvolutionMessage(
+const MESSAGE_INSERT_CHUNK = 250
+
+async function batchInsertEvolutionMessages(
   supabase: SupabaseClient,
   args: {
     tenantId: string
@@ -98,57 +102,102 @@ async function insertOneEvolutionMessage(
     leadId: string
     phone: string
     contactName: string
-    record: Record<string, unknown>
+    records: Record<string, unknown>[]
   }
-): Promise<{ ok: boolean; createdAt: string | null }> {
-  const key = args.record.key as Record<string, unknown> | undefined
-  const wamid = key?.id != null ? String(key.id) : ''
-  if (!wamid) return { ok: false, createdAt: null }
-
-  const { data: dup } = await supabase
-    .from('messages')
-    .select('id')
-    .eq('tenant_id', args.tenantId)
-    .eq('wamid', wamid)
-    .maybeSingle()
-
-  if (dup) return { ok: false, createdAt: null }
-
-  const fromMe = Boolean(key?.fromMe)
-  const pushName =
-    typeof args.record.pushName === 'string' && args.record.pushName.trim()
-      ? args.record.pushName.trim()
-      : ''
-  const senderName = fromMe ? 'Atendente' : pushName || args.contactName
-
-  const ts = args.record.messageTimestamp
-  let createdAt = new Date().toISOString()
-  if (typeof ts === 'number') {
-    createdAt = new Date(ts < 1e12 ? ts * 1000 : ts).toISOString()
+): Promise<{ inserted: number; latestAt: string | null }> {
+  type Row = {
+    tenant_id: string
+    conversation_id: string
+    lead_id: string
+    content: string
+    sender_id: string
+    sender_name: string
+    sender_type: string
+    channel: string
+    read: boolean
+    wamid: string
+    status: string
+    created_at: string
   }
 
-  const content = textFromEvolutionMessage(args.record) || '[Mensagem]'
+  const rows: Row[] = []
+  for (const record of args.records) {
+    const key = record.key as Record<string, unknown> | undefined
+    const wamid = key?.id != null ? String(key.id) : ''
+    if (!wamid) continue
 
-  const { error: msgErr } = await supabase.from('messages').insert({
-    tenant_id: args.tenantId,
-    conversation_id: args.conversationId,
-    lead_id: args.leadId,
-    content,
-    sender_id: fromMe ? 'agent' : args.phone,
-    sender_name: senderName,
-    sender_type: fromMe ? 'user' : 'lead',
-    channel: 'whatsapp',
-    read: fromMe,
-    wamid,
-    status: 'delivered',
-    created_at: createdAt,
-  })
+    const fromMe = Boolean(key?.fromMe)
+    const pushName =
+      typeof record.pushName === 'string' && record.pushName.trim()
+        ? record.pushName.trim()
+        : ''
+    const senderName = fromMe ? 'Atendente' : pushName || args.contactName
 
-  if (msgErr) {
-    console.warn('[sync-chats] message', wamid, msgErr)
-    return { ok: false, createdAt: null }
+    const ts = record.messageTimestamp
+    let createdAt = new Date().toISOString()
+    if (typeof ts === 'number') {
+      createdAt = new Date(ts < 1e12 ? ts * 1000 : ts).toISOString()
+    }
+
+    const content = textFromEvolutionMessage(record) || '[Mensagem]'
+
+    rows.push({
+      tenant_id: args.tenantId,
+      conversation_id: args.conversationId,
+      lead_id: args.leadId,
+      content,
+      sender_id: fromMe ? 'agent' : args.phone,
+      sender_name: senderName,
+      sender_type: fromMe ? 'user' : 'lead',
+      channel: 'whatsapp',
+      read: fromMe,
+      wamid,
+      status: 'delivered',
+      created_at: createdAt,
+    })
   }
-  return { ok: true, createdAt }
+
+  if (rows.length === 0) return { inserted: 0, latestAt: null }
+
+  const wamids = [...new Set(rows.map((r) => r.wamid))]
+  const already = new Set<string>()
+  const WID_CHUNK = 200
+  for (let i = 0; i < wamids.length; i += WID_CHUNK) {
+    const slice = wamids.slice(i, i + WID_CHUNK)
+    const { data: existingRows } = await supabase
+      .from('messages')
+      .select('wamid')
+      .eq('tenant_id', args.tenantId)
+      .in('wamid', slice)
+    for (const e of existingRows ?? []) {
+      already.add((e as { wamid: string }).wamid)
+    }
+  }
+  const toInsert = rows.filter((r) => !already.has(r.wamid))
+  if (toInsert.length === 0) {
+    const latestFromAll = rows.reduce(
+      (max, r) => (r.created_at > max ? r.created_at : max),
+      rows[0].created_at
+    )
+    return { inserted: 0, latestAt: latestFromAll }
+  }
+
+  let inserted = 0
+  let latestAt: string | null = null
+  for (let i = 0; i < toInsert.length; i += MESSAGE_INSERT_CHUNK) {
+    const chunk = toInsert.slice(i, i + MESSAGE_INSERT_CHUNK)
+    const { error } = await supabase.from('messages').insert(chunk)
+    if (error) {
+      console.warn('[sync-chats] batch messages', error)
+      continue
+    }
+    inserted += chunk.length
+    for (const r of chunk) {
+      if (!latestAt || r.created_at > latestAt) latestAt = r.created_at
+    }
+  }
+
+  return { inserted, latestAt }
 }
 
 /**
@@ -348,21 +397,15 @@ export async function POST(req: Request) {
         lte
       )
 
-      let latestAt: string | null = null
-      for (const record of evMessages) {
-        const { ok, createdAt } = await insertOneEvolutionMessage(supabase, {
-          tenantId,
-          conversationId: conv.id,
-          leadId,
-          phone,
-          contactName: name,
-          record,
-        })
-        if (ok) {
-          messagesInserted++
-          if (createdAt) latestAt = createdAt
-        }
-      }
+      const { inserted: nMsg, latestAt } = await batchInsertEvolutionMessages(supabase, {
+        tenantId,
+        conversationId: conv.id,
+        leadId,
+        phone,
+        contactName: name,
+        records: evMessages,
+      })
+      messagesInserted += nMsg
 
       const lastAt = latestAt || lastContactAt
       await supabase.from('conversations').update({ last_message_at: lastAt }).eq('id', conv.id)
