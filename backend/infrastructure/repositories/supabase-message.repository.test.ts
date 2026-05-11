@@ -29,7 +29,7 @@ describe('SupabaseMessageRepository', () => {
     const mockData = [
       { id: 'm1', content: 'tenant message', tenant_id: 't1' }
     ]
-    mockSupabase.from().select().eq().order.mockResolvedValue({ data: mockData, error: null })
+    mockSupabase.from().select().eq().order().limit.mockResolvedValue({ data: mockData, error: null })
 
     const result = await repository.listByTenant('t1')
 

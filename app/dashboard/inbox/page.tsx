@@ -31,7 +31,7 @@ export default function InboxPage() {
   const handleWorkspaceSync = async () => {
     setIsSyncing(true)
     try {
-      await refreshWorkspaceData()
+      await refreshWorkspaceData({ inboxSync: true })
     } catch (e) {
       console.error(e)
       alert('Não foi possível sincronizar.')

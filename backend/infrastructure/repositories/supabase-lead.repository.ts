@@ -33,11 +33,12 @@ export class SupabaseLeadRepository implements LeadRepository {
   }
 
   async list(tenantId: string, filters?: LeadFilters): Promise<Lead[]> {
+    const orderCol = filters?.orderBy ?? 'created_at'
     let query = this.supabase
       .from('leads')
       .select('*')
       .eq('tenant_id', tenantId)
-      .order('created_at', { ascending: false })
+      .order(orderCol, { ascending: false })
 
     if (filters?.status) {
       query = query.eq('status', filters.status)
@@ -52,6 +53,9 @@ export class SupabaseLeadRepository implements LeadRepository {
       query = query.or(
         `name.ilike.%${filters.search}%,phone.ilike.%${filters.search}%,email.ilike.%${filters.search}%`
       )
+    }
+    if (filters?.limit != null && filters.limit > 0) {
+      query = query.limit(filters.limit)
     }
 
     const { data, error } = await query

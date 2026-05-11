@@ -6,6 +6,10 @@ export interface LeadFilters {
   assignedTo?: string
   search?: string
   tags?: string[]
+  /** Máximo de linhas (ex.: inbox). Sem limite quando omitido. */
+  limit?: number
+  /** Coluna de ordenação; padrão `created_at` para compatibilidade com pipeline. */
+  orderBy?: 'created_at' | 'updated_at' | 'last_contact_at'
 }
 
 export interface LeadRepository {

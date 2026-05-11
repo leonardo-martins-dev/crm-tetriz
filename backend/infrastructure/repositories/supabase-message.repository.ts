@@ -17,14 +17,20 @@ export class SupabaseMessageRepository implements MessageRepository {
   }
 
   async listByTenant(tenantId: string): Promise<Message[]> {
+    /** Buscar as mais recentes primeiro (evita limite implícito do PostgREST só com as mensagens antigas). */
+    const MAX_ROWS = 20_000
     const { data, error } = await this.supabase
       .from('messages')
       .select('*')
       .eq('tenant_id', tenantId)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
+      .limit(MAX_ROWS)
 
     if (error) throw new Error(error.message)
-    return (data || []).map(this.toDomain)
+    const rows = (data || []).map(this.toDomain)
+    return rows.sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    )
   }
 
   async findByWamid(tenantId: string, wamid: string): Promise<Message | null> {

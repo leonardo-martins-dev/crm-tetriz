@@ -3,6 +3,7 @@ import { Lead, Note, PipelineStage } from '@/types'
 import { useAuthStore } from '@/lib/stores/authStore'
 import { createDefaultPipeline } from '@/domain/constants/pipeline'
 import { getLeadRepository } from '@/infrastructure/repositories'
+import type { LeadFilters } from '@/backend/application/repositories/lead.repository'
 
 interface LeadsState {
   leads: Lead[]
@@ -11,7 +12,7 @@ interface LeadsState {
   selectedLead: Lead | null
   isLoading: boolean
   
-  fetchLeads: () => Promise<void>
+  fetchLeads: (opts?: { limit?: number; orderBy?: LeadFilters['orderBy'] }) => Promise<void>
   setSelectedLead: (leadId: string | null) => void
   addLead: (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Lead | null>
   updateLead: (leadId: string, updates: Partial<Lead>) => Promise<void>
@@ -35,13 +36,19 @@ export const useLeadsStore = create<LeadsState>((set, get) => {
     selectedLead: null,
     isLoading: false,
 
-    fetchLeads: async () => {
+    fetchLeads: async (opts?: { limit?: number; orderBy?: LeadFilters['orderBy'] }) => {
       const tenantId = useAuthStore.getState().user?.tenantId
       if (!tenantId) return
 
       set({ isLoading: true })
       try {
-        const leads = await leadRepo.list(tenantId)
+        const leads =
+          opts?.limit != null || opts?.orderBy != null
+            ? await leadRepo.list(tenantId, {
+                ...(opts.limit != null ? { limit: opts.limit } : {}),
+                ...(opts.orderBy != null ? { orderBy: opts.orderBy } : {}),
+              })
+            : await leadRepo.list(tenantId)
         
         // Atualizar stages com os leadIds
         const stages = get().pipelineStages.map(stage => ({
