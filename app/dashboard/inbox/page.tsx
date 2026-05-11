@@ -31,7 +31,17 @@ export default function InboxPage() {
   const handleWorkspaceSync = async () => {
     setIsSyncing(true)
     try {
-      await refreshWorkspaceData({ inboxSync: true })
+      const r = await refreshWorkspaceData({ inboxSync: true })
+      const ev = r.evolutionSync
+      if (ev?.skipped) {
+        alert(
+          'WhatsApp (Evolution) não está conectado ou a instância não foi identificada. Abra Conexões, verifique o QR e tente de novo.'
+        )
+      } else if (ev && ev.ok === false) {
+        alert(
+          `Sincronização com a Evolution falhou${ev.status ? ` (HTTP ${ev.status})` : ''}: ${ev.detail || 'erro desconhecido'}`
+        )
+      }
     } catch (e) {
       console.error(e)
       alert('Não foi possível sincronizar.')

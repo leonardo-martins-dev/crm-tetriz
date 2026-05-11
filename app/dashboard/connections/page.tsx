@@ -554,7 +554,17 @@ export default function ConnectionsPage() {
   const handleSync = async (_conn: Connection) => {
     setIsWorkspaceSyncing(true)
     try {
-      await refreshWorkspaceData()
+      const r = await refreshWorkspaceData({ inboxSync: true })
+      const ev = r.evolutionSync
+      if (ev?.skipped) {
+        alert(
+          'Conecte o WhatsApp (QR Code) antes de sincronizar. Depois disso, os chats serão importados para o CRM.'
+        )
+      } else if (ev && ev.ok === false) {
+        alert(
+          `Sincronização Evolution falhou${ev.status ? ` (HTTP ${ev.status})` : ''}: ${ev.detail || 'erro desconhecido'}`
+        )
+      }
     } catch (e) {
       console.error(e)
       alert('Não foi possível sincronizar leads e conversas. Verifique o Supabase e tente de novo.')
