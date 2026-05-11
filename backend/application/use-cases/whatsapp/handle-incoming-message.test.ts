@@ -46,6 +46,7 @@ describe('handleIncomingMessage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockConnectionRepository.findByInstanceName.mockResolvedValue(mockConnection)
+    mockConnectionRepository.findByInstanceId.mockResolvedValue(null)
     mockLeadRepository.findByPhone.mockResolvedValue(null)
     mockLeadRepository.create.mockResolvedValue({ id: 'lead-1', name: 'João Silva', phone: '5511999999999', tenantId: 'tenant-123' })
     mockConversationRepository.findByLeadId.mockResolvedValue(null)
@@ -54,6 +55,17 @@ describe('handleIncomingMessage', () => {
     mockAgentRepository.findActiveByTrigger.mockResolvedValue([])
     mockMessageRepository.findByConversationId.mockResolvedValue([])
     mockMessageRepository.create.mockResolvedValue({ id: 'msg-rec-1' })
+  })
+
+  it('deve resolver conexão por instance_id (UUID) se o nome da instância não existir', async () => {
+    const uuid = '6eab4883-e4fe-4838-a1a5-052d4d980f3e'
+    mockConnectionRepository.findByInstanceName.mockResolvedValue(null)
+    mockConnectionRepository.findByInstanceId.mockResolvedValue(mockConnection)
+
+    await handleIncomingMessage({ ...payload, instanceName: uuid }, mockDeps)
+
+    expect(mockConnectionRepository.findByInstanceId).toHaveBeenCalledWith(uuid)
+    expect(mockMessageRepository.create).toHaveBeenCalled()
   })
 
   it('deve criar um novo lead se ele não existir', async () => {

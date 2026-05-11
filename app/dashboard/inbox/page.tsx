@@ -228,9 +228,9 @@ export default function InboxPage() {
                 <Bot className="h-6 w-6 text-muted-foreground" />
               </div>
               <h3 className="text-sm font-medium">Nenhuma conversa</h3>
-              <p className="text-xs text-muted-foreground mt-1 max-w-[220px]">
+              <p className="text-xs text-muted-foreground mt-1 max-w-[240px]">
                 {evolutionConnected
-                  ? 'WhatsApp conectado. As conversas aparecem quando houver leads e mensagens no canal.'
+                  ? 'Novas mensagens entram quando a Evolution chama o webhook do CRM — o botão Atualizar só recarrega dados já gravados no Supabase (não importa o WhatsApp).'
                   : 'As conversas aparecerão aqui assim que seus leads entrarem em contato.'}
               </p>
               {!evolutionConnected ? (

@@ -20,16 +20,29 @@ export function isEvolutionMessagesUpdate(event: unknown): boolean {
 }
 
 export type EvolutionUpsertChunk = {
+  /** Nome `crm-...` ou UUID da instância Evolution (webhook pode mandar qualquer um). */
   instanceName: string
   data: Record<string, unknown>
+}
+
+/** Extrai identificador da instância (string ou objeto aninhado da Evolution). */
+export function resolveWebhookInstanceKey(body: Record<string, unknown>): string | undefined {
+  const raw = body.instance ?? body.instanceName
+  if (typeof raw === 'string' && raw.trim()) return raw.trim()
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const o = raw as Record<string, unknown>
+    if (typeof o.instanceName === 'string' && o.instanceName.trim()) return o.instanceName.trim()
+    if (typeof o.instanceId === 'string' && o.instanceId.trim()) return o.instanceId.trim()
+  }
+  return undefined
 }
 
 /**
  * Um único POST pode trazer uma mensagem ou um lote em `data.messages`.
  */
 export function splitEvolutionMessagesUpsert(body: Record<string, unknown>): EvolutionUpsertChunk[] {
-  const instanceName = (body.instance ?? body.instanceName) as string | undefined
-  if (!instanceName || typeof instanceName !== 'string') return []
+  const instanceName = resolveWebhookInstanceKey(body)
+  if (!instanceName) return []
 
   const raw = body.data as unknown
   if (raw == null) return []

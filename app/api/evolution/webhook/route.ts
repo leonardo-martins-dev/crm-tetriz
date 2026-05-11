@@ -6,11 +6,12 @@ import { createClient } from '@supabase/supabase-js'
 import {
   isEvolutionMessagesUpdate,
   isEvolutionMessagesUpsert,
+  resolveWebhookInstanceKey,
   splitEvolutionMessagesUpsert,
 } from '@/lib/evolution/normalize-webhook'
 
 function extractLegacyUpsertPayload(body: Record<string, unknown>) {
-  const instanceName = (body.instance ?? body.instanceName) as string | undefined
+  const instanceName = resolveWebhookInstanceKey(body)
   const data = body.data as Record<string, unknown> | undefined
   if (!instanceName || !data || typeof data !== 'object') return null
   return { instanceName, data }
@@ -126,14 +127,17 @@ export async function POST(req: Request) {
 
     // ─── Atualização de status ───
     if (isEvolutionMessagesUpdate(rawEvent)) {
-      const instance = (body.instance ?? body.instanceName) as string | undefined
+      const instance = resolveWebhookInstanceKey(body)
       const data = body.data as Record<string, unknown> | undefined
       const key = data?.key as Record<string, unknown> | undefined
       const update = data?.update as Record<string, unknown> | undefined
 
       if (instance && key?.id && update?.status != null) {
         try {
-          const connection = await container.connectionRepo.findByInstanceName(instance)
+          let connection = await container.connectionRepo.findByInstanceName(instance)
+          if (!connection) {
+            connection = await container.connectionRepo.findByInstanceId(instance)
+          }
           if (connection) {
             await handleMessageStatusUpdate(
               connection.tenantId,

@@ -57,10 +57,13 @@ export async function handleIncomingMessage(
     storageService,
   } = deps
 
-  // 1. Encontra a conexão
-  let connection;
+  // 1. Encontra a conexão (nome da instância ou UUID gravado em connections.instance_id)
+  let connection
   if (payload.instanceName) {
     connection = await connectionRepo.findByInstanceName(payload.instanceName)
+    if (!connection) {
+      connection = await connectionRepo.findByInstanceId(payload.instanceName)
+    }
   } else if (payload.phoneNumberId) {
     connection = await connectionRepo.findByPhoneNumberId(payload.phoneNumberId)
   }

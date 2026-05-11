@@ -43,6 +43,17 @@ export class SupabaseConnectionRepository implements ConnectionRepository {
     return this.toDomain(data)
   }
 
+  async findByInstanceId(instanceId: string): Promise<Connection | null> {
+    const { data, error } = await this.supabase
+      .from('connections')
+      .select('*')
+      .eq('instance_id', instanceId)
+      .maybeSingle()
+
+    if (error || !data) return null
+    return this.toDomain(data)
+  }
+
   async findByTenantId(tenantId: string): Promise<Connection[]> {
     const { data, error } = await this.supabase
       .from('connections')

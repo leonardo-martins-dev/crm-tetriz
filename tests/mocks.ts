@@ -93,6 +93,7 @@ export const mockProfileRepository = {
 export const mockConnectionRepository = {
   findById: vi.fn(),
   findByInstanceName: vi.fn(),
+  findByInstanceId: vi.fn(),
   findByPhoneNumberId: vi.fn(),
   findByTenantId: vi.fn(),
   update: vi.fn(),
