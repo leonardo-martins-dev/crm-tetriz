@@ -157,15 +157,15 @@ export default function MetricsPage() {
         })}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
-        <Card className="transition-all hover:shadow-md border-border/50 overflow-hidden">
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0">
+        <Card className="transition-all hover:shadow-md border-border/50 overflow-hidden min-w-0">
           <CardHeader className="bg-muted/10 border-b border-border/50 pb-4 mb-4 flex flex-row items-center justify-between">
             <CardTitle className="text-sm font-medium">Leads por Janela 24h</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="h-[220px] w-full pt-4">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-[220px] w-full min-w-0 pt-4">
+              <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
                   <Pie
                     data={windowData}
@@ -196,14 +196,14 @@ export default function MetricsPage() {
           </CardContent>
         </Card>
 
-        <Card className="transition-all hover:shadow-md border-border/50 overflow-hidden">
+        <Card className="transition-all hover:shadow-md border-border/50 overflow-hidden min-w-0">
           <CardHeader className="bg-muted/10 border-b border-border/50 pb-4 mb-4 flex flex-row items-center justify-between">
             <CardTitle className="text-sm font-medium">Comportamento do Funil</CardTitle>
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="h-[240px] w-full pt-2">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-[240px] w-full min-w-0 pt-2">
+              <ResponsiveContainer width="100%" height={240}>
                 <BarChart layout="vertical" data={stageData} margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
                   <XAxis type="number" hide />
                   <YAxis 
@@ -227,14 +227,14 @@ export default function MetricsPage() {
         </Card>
 
 
-        <Card className="transition-all hover:shadow-md border-border/50 overflow-hidden">
+        <Card className="transition-all hover:shadow-md border-border/50 overflow-hidden min-w-0">
           <CardHeader className="bg-muted/10 border-b border-border/50 pb-4 mb-4 flex flex-row items-center justify-between">
             <CardTitle className="text-sm font-medium">Distribuição por Tags</CardTitle>
             <Tags className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="h-[240px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-[240px] w-full min-w-0">
+              <ResponsiveContainer width="100%" height={240}>
                 <RadarChart cx="50%" cy="50%" outerRadius="65%" data={tagData}>
                   <PolarGrid stroke="hsl(var(--muted-foreground)/0.2)" />
                   <PolarAngleAxis dataKey="name" tick={{ fontSize: 10, fill: 'currentColor', opacity: 0.8 }} />
@@ -246,14 +246,14 @@ export default function MetricsPage() {
           </CardContent>
         </Card>
 
-        <Card className="transition-all hover:shadow-md border-border/50 overflow-hidden">
+        <Card className="transition-all hover:shadow-md border-border/50 overflow-hidden min-w-0">
           <CardHeader className="bg-muted/10 border-b border-border/50 pb-4 mb-4 flex flex-row items-center justify-between">
             <CardTitle className="text-sm font-medium">Atendimentos por Responsável</CardTitle>
             <UserCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="h-[240px] w-full pt-2">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-[240px] w-full min-w-0 pt-2">
+              <ResponsiveContainer width="100%" height={240}>
                 <BarChart layout="vertical" data={assignedData} margin={{ top: 0, right: 30, left: 20, bottom: 0 }}>
                   <XAxis type="number" hide />
                   <YAxis 

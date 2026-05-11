@@ -15,19 +15,44 @@ export async function GET(req: Request) {
     const url = new URL(`${base}/instance/fetchInstances`)
     if (instanceName) url.searchParams.set('instanceName', instanceName)
 
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: {
-        apikey: GLOBAL_API_KEY,
-      },
-    })
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 25_000)
+
+    let response: Response
+    try {
+      response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          apikey: GLOBAL_API_KEY,
+        },
+        signal: controller.signal,
+      })
+    } catch (e) {
+      clearTimeout(timeoutId)
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error('[fetch-instances] upstream unreachable:', base, msg)
+      return NextResponse.json(
+        {
+          error: 'Evolution API unreachable from CRM server',
+          hint: 'Check EVOLUTION_API_URL, firewall, and that the Evolution host accepts requests from this deployment.',
+          details: msg,
+          attemptedUrl: `${base}/instance/fetchInstances`,
+        },
+        { status: 502 }
+      )
+    }
+    clearTimeout(timeoutId)
 
     const text = await response.text()
     if (!response.ok) {
       console.error('[fetch-instances]', response.status, text)
       return NextResponse.json(
-        { error: 'Failed to fetch instances from Evolution', details: text },
-        { status: response.status }
+        {
+          error: 'Failed to fetch instances from Evolution',
+          details: text,
+          evolutionStatus: response.status,
+        },
+        { status: response.status >= 500 ? 502 : response.status }
       )
     }
 
