@@ -117,17 +117,30 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
               mediaType: payload.new.media_type,
               wamid: payload.new.wamid,
             }
-            
-            set((state) => {
-              // De-duplicação de mensagem otimista
-              const exists = state.messages.some(m => 
-                (m.wamid && m.wamid === newMessage.wamid) || 
-                (m.id === newMessage.id)
-              )
-              
-              if (exists) return state
 
-              const updatedMessages = [...state.messages, newMessage]
+            set((state) => {
+              const isTemp = (id: string) => id.startsWith('temp-') || id.startsWith('temp-media-')
+              let base = state.messages
+              if (newMessage.senderType === 'user') {
+                base = base.filter((m) => {
+                  if (!isTemp(m.id)) return true
+                  if (m.leadId !== newMessage.leadId) return true
+                  if (newMessage.wamid && m.wamid === newMessage.wamid) return false
+                  if (m.content === newMessage.content) return false
+                  return true
+                })
+              }
+
+              const exists = base.some(
+                (m) =>
+                  (m.wamid && newMessage.wamid && m.wamid === newMessage.wamid) || m.id === newMessage.id
+              )
+
+              if (exists) {
+                return { ...state, messages: base }
+              }
+
+              const updatedMessages = [...base, newMessage]
               const updatedConversations = state.conversations.map((conv) =>
                 conv.leadId === newMessage.leadId
                   ? { 
@@ -144,7 +157,7 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
                   const aTime = a.lastMessage?.createdAt || a.lead.updatedAt
                   const bTime = b.lastMessage?.createdAt || b.lead.updatedAt
                   return new Date(bTime).getTime() - new Date(aTime).getTime()
-                })
+                }),
               }
             })
           } else if (payload.eventType === 'UPDATE') {
@@ -225,11 +238,15 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
           senderName: user.name
         })
       })
-      
-      const result = await response.json()
-      if (!result.success) throw new Error(result.error)
 
-      // A mensagem real virá pelo Realtime e substituirá a otimista se os IDS baterem ou se usarmos wamid
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.error || result.details || 'Falha ao enviar')
+      }
+
+      set((state) => ({
+        messages: state.messages.filter((m) => m.id !== tempId),
+      }))
     } catch (err) {
       console.error('Falha ao enviar mensagem:', err)
       // Marcar como falha na UI
@@ -286,10 +303,14 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
         method: 'POST',
         body: formData
       })
-      
-      const result = await response.json()
-      if (!result.success) throw new Error(result.error)
 
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Falha ao enviar mídia')
+
+      URL.revokeObjectURL(tempUrl)
+      set((state) => ({
+        messages: state.messages.filter((m) => m.id !== tempId),
+      }))
     } catch (err) {
       console.error('Falha ao enviar mídia:', err)
       set((state) => ({

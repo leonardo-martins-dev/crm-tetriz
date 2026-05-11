@@ -13,10 +13,22 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { cn, formatRelativeTime } from '@/lib/utils'
-import { 
-  Send, Clock, Lock, ChevronLeft, ChevronRight, Bot, User as UserIcon, 
-  Paperclip, Image as ImageIcon, Music, Video, FileText, 
-  Check, CheckCheck, AlertCircle, RefreshCw
+import {
+  Send,
+  Clock,
+  ChevronLeft,
+  ChevronRight,
+  Bot,
+  User as UserIcon,
+  Paperclip,
+  Image as ImageIcon,
+  Music,
+  Video,
+  FileText,
+  Check,
+  CheckCheck,
+  AlertCircle,
+  RefreshCw,
 } from 'lucide-react'
 import { LeadCard } from '@/components/LeadCard'
 import { useRef } from 'react'
@@ -84,8 +96,6 @@ export default function InboxPage() {
 
   const handleSendMessage = () => {
     if (!messageInput.trim() || !selectedConversationId) return
-    if (!selectedConversation?.lead.window24hOpen) return
-
     sendMessage(selectedConversationId, messageInput)
     setMessageInput('')
   }
@@ -176,8 +186,22 @@ export default function InboxPage() {
     <div className="flex h-[calc(100vh-8rem)] gap-4 overflow-hidden">
       {/* Lista de Conversas */}
       <div className="w-80 flex-shrink-0 border-r bg-card flex flex-col h-full">
-        <div className="border-b p-4 flex-shrink-0">
+        <div className="border-b p-4 flex-shrink-0 flex items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">Conversas</h2>
+          {evolutionConnected && (
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              className="h-8 text-xs shrink-0"
+              disabled={isSyncing}
+              onClick={handleWorkspaceSync}
+              title="Importa 20 conversas recentes e mensagens dos últimos 3 dias"
+            >
+              <RefreshCw className={cn('h-3 w-3 mr-1', isSyncing && 'animate-spin')} />
+              Atualizar
+            </Button>
+          )}
         </div>
         <div className="flex-1 overflow-y-auto scrollbar-hover">
           {conversations.length > 0 ? (
@@ -192,6 +216,17 @@ export default function InboxPage() {
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
+                    {conv.lead.avatar ? (
+                      <img
+                        src={conv.lead.avatar}
+                        alt=""
+                        className="h-10 w-10 rounded-full object-cover flex-shrink-0 border border-border"
+                      />
+                    ) : (
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium">
+                        {conv.lead.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-medium truncate">{conv.lead.name}</span>
@@ -203,12 +238,6 @@ export default function InboxPage() {
                       </div>
                       <div className="flex items-center gap-2 mb-1">
                         <ChannelBadge channel={conv.lead.channel} />
-                        {!conv.lead.window24hOpen && (
-                          <Badge variant="danger" className="gap-1">
-                            <Lock className="h-3 w-3" />
-                            Janela fechada
-                          </Badge>
-                        )}
                       </div>
                       {conv.lastMessage && (
                         <p className="text-sm text-muted-foreground truncate flex items-center gap-1">
@@ -238,9 +267,9 @@ export default function InboxPage() {
                 <Bot className="h-6 w-6 text-muted-foreground" />
               </div>
               <h3 className="text-sm font-medium">Nenhuma conversa</h3>
-              <p className="text-xs text-muted-foreground mt-1 max-w-[240px]">
+              <p className="text-xs text-muted-foreground mt-1 max-w-[260px]">
                 {evolutionConnected
-                  ? 'Novas mensagens entram quando a Evolution chama o webhook do CRM — o botão Atualizar só recarrega dados já gravados no Supabase (não importa o WhatsApp).'
+                  ? 'Use Atualizar inbox para importar as 20 conversas mais recentes (mensagens dos últimos 3 dias) e a foto/nome do WhatsApp. O webhook continua gravando mensagens novas em tempo real.'
                   : 'As conversas aparecerão aqui assim que seus leads entrarem em contato.'}
               </p>
               {!evolutionConnected ? (
@@ -290,9 +319,17 @@ export default function InboxPage() {
             <div className="border-b p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                    {selectedConversation.lead.name.charAt(0).toUpperCase()}
-                  </div>
+                  {selectedConversation.lead.avatar ? (
+                    <img
+                      src={selectedConversation.lead.avatar}
+                      alt=""
+                      className="h-10 w-10 rounded-full object-cover border border-border"
+                    />
+                  ) : (
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                      {selectedConversation.lead.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold">{selectedConversation.lead.name}</h3>
@@ -305,17 +342,6 @@ export default function InboxPage() {
                     </div>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground mt-0.5">
                       <ChannelBadge channel={selectedConversation.lead.channel} />
-                      {selectedConversation.lead.window24hOpen ? (
-                        <Badge variant="success" className="gap-1">
-                          <Clock className="h-3 w-3" />
-                          Janela aberta
-                        </Badge>
-                      ) : (
-                        <Badge variant="danger" className="gap-1">
-                          <Lock className="h-3 w-3" />
-                          Janela fechada
-                        </Badge>
-                      ) }
                     </div>
                   </div>
                 </div>
@@ -378,44 +404,26 @@ export default function InboxPage() {
 
             {/* Input de Mensagem */}
             <div className="border-t p-4">
-              {!selectedConversation.lead.window24hOpen ? (
-                <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-                  <div className="flex items-center gap-2">
-                    <Lock className="h-4 w-4" />
-                    <span>A janela de 24h está fechada. Não é possível enviar mensagens.</span>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex gap-2">
-                  <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    className="hidden" 
-                    onChange={handleFileChange}
-                  />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={handleFileClick}
-                    disabled={!selectedConversation.lead.window24hOpen}
-                  >
-                    <Paperclip className="h-4 w-4" />
-                  </Button>
-                  <Input
-                    value={messageInput}
-                    onChange={(e) => setMessageInput(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                    placeholder="Digite sua mensagem..."
-                    disabled={!selectedConversation.lead.window24hOpen}
-                  />
-                  <Button
-                    onClick={handleSendMessage}
-                    disabled={!messageInput.trim() || !selectedConversation.lead.window24hOpen}
-                  >
-                    <Send className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
+              <div className="flex gap-2">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+                <Button variant="outline" size="icon" onClick={handleFileClick}>
+                  <Paperclip className="h-4 w-4" />
+                </Button>
+                <Input
+                  value={messageInput}
+                  onChange={(e) => setMessageInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  placeholder="Digite sua mensagem..."
+                />
+                <Button onClick={handleSendMessage} disabled={!messageInput.trim()}>
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </>
         ) : (

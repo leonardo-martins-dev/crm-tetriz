@@ -20,6 +20,7 @@ export const leadSchema = z.object({
   channel: channelSchema,
   phone: z.string().optional(),
   email: z.string().email().optional(),
+  avatar: z.string().optional(),
   status: leadStatusSchema,
   pipelineStage: z.string().min(1),
   assignedTo: z.string().optional(),

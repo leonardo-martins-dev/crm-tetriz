@@ -116,6 +116,7 @@ export class SupabaseLeadRepository implements LeadRepository {
       name: row.name,
       phone: row.phone,
       email: row.email,
+      avatar: row.avatar_url || undefined,
       channel: row.channel,
       status: row.status,
       pipelineStage: row.pipeline_stage,
@@ -140,6 +141,7 @@ export class SupabaseLeadRepository implements LeadRepository {
     if (entity.name !== undefined) row.name = entity.name
     if (entity.phone !== undefined) row.phone = entity.phone
     if (entity.email !== undefined) row.email = entity.email
+    if (entity.avatar !== undefined) row.avatar_url = entity.avatar
     if (entity.channel !== undefined) row.channel = entity.channel
     if (entity.status !== undefined) row.status = entity.status
     if (entity.pipelineStage !== undefined) row.pipeline_stage = entity.pipelineStage

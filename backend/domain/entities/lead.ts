@@ -6,6 +6,8 @@ export interface Lead {
   name: string
   phone?: string
   email?: string
+  /** URL da foto (ex.: WhatsApp / Evolution profilePicUrl) */
+  avatar?: string
   channel: string
   status: LeadStatus
   pipelineStage: string

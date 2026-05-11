@@ -33,8 +33,10 @@ export async function POST(req: Request) {
       )
     }
 
-    const data = await response.json()
-    
+    const raw = await response.json()
+    const data =
+      raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {}
+
     // Persistir no Supabase para historico e Realtime
     if (tenantId && leadId) {
       const { createClient } = await import('@supabase/supabase-js')
@@ -61,8 +63,9 @@ export async function POST(req: Request) {
       }
 
       if (conversation) {
-        const wamid = data.key?.id
-        
+        const key = data.key as { id?: string } | undefined
+        const wamid = key?.id
+
         await supabase.from('messages').insert({
           tenant_id: tenantId,
           conversation_id: conversation.id,
@@ -84,8 +87,8 @@ export async function POST(req: Request) {
           .eq('id', conversation.id)
       }
     }
-    
-    return NextResponse.json(data)
+
+    return NextResponse.json({ success: true, ...data })
   } catch (error) {
     console.error('Erro na API de enviar msg:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
