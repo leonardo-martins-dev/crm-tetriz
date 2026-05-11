@@ -34,7 +34,7 @@ export async function refreshWorkspaceData(opts?: RefreshWorkspaceOptions): Prom
 
   /** Inbox: importar chats da Evolution → leads/mensagens no Supabase (a UI só lê o banco). */
   if (opts?.inboxSync) {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     const evolutionConn = useConnectionsStore
       .getState()
       .connections.find((c) => c.provider === 'evolution' && c.connected && c.instanceName)

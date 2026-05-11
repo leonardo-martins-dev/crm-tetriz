@@ -8,6 +8,12 @@ interface AuthState {
   client: Client | null
   isAuthenticated: boolean
   isLoading: boolean
+  /**
+   * Tenant efetivo da sessão:
+   * - owner: usa cliente selecionado em "Acessar CRM"
+   * - demais perfis: usa tenant do próprio perfil
+   */
+  getActiveTenantId: () => string | null
   login: (email: string, password: string) => Promise<{ user: User | null; error: string | null }>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
@@ -23,6 +29,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isAuthenticated: false,
   // false no boot: telas como `/` não chamam refreshUser(); true inicial deixava login preso em "carregando"
   isLoading: false,
+
+  getActiveTenantId: () => {
+    const { user, client } = get()
+    if (!user) return null
+    if (user.role === 'owner') return client?.id ?? null
+    return user.tenantId ?? null
+  },
 
   login: async (email: string, password: string) => {
     set({ isLoading: true })

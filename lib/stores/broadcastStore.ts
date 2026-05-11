@@ -20,7 +20,7 @@ export const useBroadcastStore = create<BroadcastState>((set, get) => ({
   isLoading: false,
 
   fetchBroadcasts: async () => {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!tenantId) return
 
     set({ isLoading: true })
@@ -34,7 +34,7 @@ export const useBroadcastStore = create<BroadcastState>((set, get) => ({
   },
 
   addBroadcast: async (broadcastData) => {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!tenantId) return
 
     try {
@@ -52,7 +52,7 @@ export const useBroadcastStore = create<BroadcastState>((set, get) => ({
   },
 
   updateBroadcast: async (broadcastId, updates) => {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!tenantId) return
 
     try {
@@ -69,7 +69,7 @@ export const useBroadcastStore = create<BroadcastState>((set, get) => ({
   },
 
   deleteBroadcast: async (broadcastId) => {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!tenantId) return
 
     try {
@@ -83,7 +83,7 @@ export const useBroadcastStore = create<BroadcastState>((set, get) => ({
   },
 
   sendBroadcast: async (broadcastId) => {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!tenantId) return
 
     const broadcast = get().broadcasts.find((b) => b.id === broadcastId)

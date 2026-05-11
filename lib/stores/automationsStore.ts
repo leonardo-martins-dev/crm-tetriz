@@ -20,7 +20,7 @@ export const useAutomationsStore = create<AutomationsState>((set, get) => ({
   isLoading: false,
 
   fetchAutomations: async () => {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!tenantId) return
 
     set({ isLoading: true })
@@ -52,7 +52,7 @@ export const useAutomationsStore = create<AutomationsState>((set, get) => ({
   },
 
   addAutomation: async (automationData) => {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!tenantId) return
 
     try {
@@ -68,7 +68,7 @@ export const useAutomationsStore = create<AutomationsState>((set, get) => ({
   },
 
   updateAutomation: async (id, updates) => {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!tenantId) return
 
     try {
@@ -80,7 +80,7 @@ export const useAutomationsStore = create<AutomationsState>((set, get) => ({
   },
 
   deleteAutomation: async (id) => {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!tenantId) return
 
     try {

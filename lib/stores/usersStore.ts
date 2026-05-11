@@ -20,7 +20,7 @@ export const useUsersStore = create<UsersState>((set, get) => ({
   isLoading: false,
 
   fetchUsers: async () => {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!tenantId) return
 
     set({ isLoading: true })

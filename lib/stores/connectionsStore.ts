@@ -53,7 +53,7 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
   isLoading: false,
 
   fetchConnections: async () => {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!tenantId) return
 
     set({ isLoading: true })
@@ -90,7 +90,7 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
   },
 
   updateConnection: async (id, updates) => {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!tenantId) return
 
     try {
@@ -126,7 +126,7 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
   },
 
   connectEvolution: async (instanceName, evolutionApiKey, meta) => {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!tenantId) return
 
     const conn = get().connections.find(c => c.provider === 'evolution')
@@ -168,7 +168,7 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
   },
 
   ensureConnectionSlot: async (provider) => {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!tenantId) return null
 
     await get().fetchConnections()

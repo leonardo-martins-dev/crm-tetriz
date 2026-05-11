@@ -37,7 +37,7 @@ export const useLeadsStore = create<LeadsState>((set, get) => {
     isLoading: false,
 
     fetchLeads: async (opts?: { limit?: number; orderBy?: LeadFilters['orderBy'] }) => {
-      const tenantId = useAuthStore.getState().user?.tenantId
+      const tenantId = useAuthStore.getState().getActiveTenantId()
       if (!tenantId) return
 
       set({ isLoading: true })
@@ -69,7 +69,7 @@ export const useLeadsStore = create<LeadsState>((set, get) => {
     },
 
     addLead: async (input) => {
-      const tenantId = useAuthStore.getState().user?.tenantId
+      const tenantId = useAuthStore.getState().getActiveTenantId()
       if (!tenantId) return null
 
       try {
@@ -89,7 +89,7 @@ export const useLeadsStore = create<LeadsState>((set, get) => {
     },
 
     updateLead: async (leadId: string, updates: Partial<Lead>) => {
-      const tenantId = useAuthStore.getState().user?.tenantId
+      const tenantId = useAuthStore.getState().getActiveTenantId()
       if (!tenantId) return
 
       // Update otimista
@@ -109,7 +109,7 @@ export const useLeadsStore = create<LeadsState>((set, get) => {
     },
 
     addNote: async (leadId: string, note) => {
-      const tenantId = useAuthStore.getState().user?.tenantId
+      const tenantId = useAuthStore.getState().getActiveTenantId()
       if (!tenantId) return
 
       const lead = get().leads.find(l => l.id === leadId)
@@ -170,7 +170,7 @@ export const useLeadsStore = create<LeadsState>((set, get) => {
     },
 
     deleteLead: async (leadId: string) => {
-      const tenantId = useAuthStore.getState().user?.tenantId
+      const tenantId = useAuthStore.getState().getActiveTenantId()
       if (!tenantId) return
 
       try {

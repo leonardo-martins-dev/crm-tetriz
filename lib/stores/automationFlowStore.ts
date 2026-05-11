@@ -52,7 +52,7 @@ export const useAutomationFlowStore = create<AutomationFlowState>((set, get) => 
   isLoading: false,
 
   fetchFlow: async (flowId: string) => {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!tenantId) return
 
     set({ isLoading: true })
@@ -78,7 +78,7 @@ export const useAutomationFlowStore = create<AutomationFlowState>((set, get) => 
 
   saveFlow: async () => {
     const flow = get().currentFlow
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!flow || !tenantId) return
 
     try {

@@ -34,7 +34,7 @@ export const useTagsStore = create<TagsState>((set, get) => ({
   isLoading: false,
 
   fetchTags: async () => {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!tenantId) return
 
     set({ isLoading: true })
@@ -59,7 +59,7 @@ export const useTagsStore = create<TagsState>((set, get) => ({
   },
 
   addTag: async (name, color) => {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!tenantId) return
 
     const existingTag = get().tags.find(t => t.name.toLowerCase() === name.toLowerCase())
@@ -90,7 +90,7 @@ export const useTagsStore = create<TagsState>((set, get) => ({
   },
 
   updateTag: async (tagId, updates) => {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!tenantId) return
 
     try {
@@ -110,7 +110,7 @@ export const useTagsStore = create<TagsState>((set, get) => ({
   },
 
   deleteTag: async (tagId) => {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!tenantId) return
 
     try {

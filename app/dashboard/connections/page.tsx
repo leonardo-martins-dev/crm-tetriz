@@ -45,6 +45,7 @@ export default function ConnectionsPage() {
     fetchConnections,
   } = useConnectionsStore()
   const user = useAuthStore((s) => s.user)
+  const activeTenantId = useAuthStore((s) => s.getActiveTenantId())
 
   // Modal state
   const [isQrModalOpen, setIsQrModalOpen] = useState(false)
@@ -66,7 +67,7 @@ export default function ConnectionsPage() {
 
   const [isWorkspaceSyncing, setIsWorkspaceSyncing] = useState(false)
 
-  const tenantId = user?.tenantId ?? ''
+  const tenantId = activeTenantId ?? ''
 
   const displayConnections = useMemo((): Connection[] => {
     return PROVIDERS.map((provider) => {
@@ -84,8 +85,8 @@ export default function ConnectionsPage() {
   }, [connections, tenantId])
 
   useEffect(() => {
-    if (user?.tenantId) fetchConnections()
-  }, [user?.tenantId, fetchConnections])
+    if (tenantId) fetchConnections()
+  }, [tenantId, fetchConnections])
 
   /**
    * Lista instâncias do tenant na Evolution, confere connection-state e associa ao CRM

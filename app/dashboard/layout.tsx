@@ -14,7 +14,8 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const { isAuthenticated, user, refreshUser } = useAuthStore()
+  const { isAuthenticated, refreshUser } = useAuthStore()
+  const activeTenantId = useAuthStore((s) => s.getActiveTenantId())
   const { fetchLeads, leads } = useLeadsStore()
   const { fetchConnections } = useConnectionsStore()
   const { initializeConversations, subscribeToMessages } = useConversationsStore()
@@ -26,22 +27,22 @@ export default function DashboardLayout({
     refreshUser().finally(() => setIsChecking(false))
   }, [refreshUser])
 
-  // 2. Carregar dados iniciais quando o tenantId estiver disponível
+  // 2. Carregar dados iniciais quando o tenant efetivo estiver disponível
   useEffect(() => {
-    if (user?.tenantId) {
+    if (activeTenantId) {
       fetchLeads()
       fetchConnections()
     }
-  }, [user?.tenantId, fetchLeads, fetchConnections])
+  }, [activeTenantId, fetchLeads, fetchConnections])
 
   // 3. Inicializar conversas e Realtime
   useEffect(() => {
-    if (user?.tenantId && leads.length > 0) {
+    if (activeTenantId && leads.length > 0) {
       initializeConversations(leads)
       const unsubscribe = subscribeToMessages()
       return () => unsubscribe()
     }
-  }, [user?.tenantId, leads, initializeConversations, subscribeToMessages])
+  }, [activeTenantId, leads, initializeConversations, subscribeToMessages])
 
   // 4. Proteção de rota
   useEffect(() => {

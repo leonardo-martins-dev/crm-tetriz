@@ -45,7 +45,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
   isLoading: false,
 
   fetchAgents: async () => {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!tenantId) return
 
     set({ isLoading: true })
@@ -74,7 +74,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
   },
 
   addAgent: async (agentData) => {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!tenantId) return
 
     try {
@@ -109,7 +109,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
   },
 
   updateAgent: async (agentId, updates) => {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!tenantId) return
 
     try {
@@ -134,7 +134,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
   },
 
   deleteAgent: async (agentId) => {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!tenantId) return
 
     try {

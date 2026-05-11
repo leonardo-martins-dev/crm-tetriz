@@ -33,7 +33,7 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
   isLoading: false,
 
   initializeConversations: async (leads: Lead[]) => {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!tenantId) return
 
     if (leads.length === 0) {
@@ -83,7 +83,7 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
   },
 
   subscribeToMessages: () => {
-    const tenantId = useAuthStore.getState().user?.tenantId
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!tenantId) return () => {}
 
     // Importar supabase apenas para o Realtime, já que repositórios são Request/Response
@@ -197,7 +197,9 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
 
   sendMessage: async (leadId: string, content: string) => {
     const user = useAuthStore.getState().user
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!user) return
+    if (!tenantId) return
 
     const lead = get().conversations.find((c) => c.leadId === leadId)?.lead
     if (!lead) return
@@ -206,7 +208,7 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
     const tempId = `temp-${Date.now()}`
     const newMessage: Message = {
       id: tempId,
-      tenantId: user.tenantId,
+      tenantId,
       leadId,
       content,
       senderId: user.id,
@@ -232,7 +234,7 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
           instanceName: activeConnection?.instanceName,
           recipientPhone: lead.phone?.replace(/\D/g, ''),
           message: content,
-          tenantId: user.tenantId,
+          tenantId,
           leadId: lead.id,
           senderId: user.id,
           senderName: user.name
@@ -258,7 +260,9 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
 
   sendMediaMessage: async (leadId: string, file: File, type: 'image' | 'audio' | 'video' | 'document') => {
     const user = useAuthStore.getState().user
+    const tenantId = useAuthStore.getState().getActiveTenantId()
     if (!user) return
+    if (!tenantId) return
 
     const lead = get().conversations.find((c) => c.leadId === leadId)?.lead
     if (!lead) return
@@ -268,7 +272,7 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
     
     const newMessage: Message = {
       id: tempId,
-      tenantId: user.tenantId,
+      tenantId,
       leadId,
       content: `[Mídia: ${type}]`,
       senderId: user.id,
@@ -294,7 +298,7 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
       formData.append('type', type)
       formData.append('instanceName', activeConnection?.instanceName || '')
       formData.append('recipientPhone', lead.phone?.replace(/\D/g, '') || '')
-      formData.append('tenantId', user.tenantId || '')
+      formData.append('tenantId', tenantId)
       formData.append('leadId', lead.id)
       formData.append('senderId', user.id)
       formData.append('senderName', user.name)
