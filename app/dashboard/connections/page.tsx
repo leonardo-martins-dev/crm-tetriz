@@ -313,13 +313,19 @@ export default function ConnectionsPage() {
 
       const evolutionConn = useConnectionsStore.getState().connections.find((c) => c.provider === 'evolution')
 
-      // Reutiliza nome da instância já cadastrada → mesmo número reconecta via GET connect (doc Instance Connect)
+      // 1) Tenta QR na instância já salva (reconexão)
       if (evolutionConn?.instanceName) {
-        const instanceName = evolutionConn.instanceName
-        setCurrentInstanceName(instanceName)
+        setCurrentInstanceName(evolutionConn.instanceName)
         setCurrentInstanceId(evolutionConn.instanceId || undefined)
-        await refreshEvolutionQr(instanceName, evolutionConn.instanceId)
-        return
+        const gotQr = await refreshEvolutionQr(
+          evolutionConn.instanceName,
+          evolutionConn.instanceId,
+          { quiet: true }
+        )
+        if (gotQr) return
+        // Instância sumiu na Evolution (404): segue para criar outra e mostrar QR
+        setQrBase64(undefined)
+        setPairingCode(undefined)
       }
 
       const instanceName = `${tenantEvolutionPrefix(tenantId)}${Date.now()}`
@@ -337,14 +343,42 @@ export default function ConnectionsPage() {
       })
 
       const data = await res.json()
+      if (!res.ok) {
+        alert(
+          typeof data?.error === 'string'
+            ? data.error
+            : 'Não foi possível criar a instância na Evolution. Verifique EVOLUTION_API_URL e a apikey no servidor.'
+        )
+        setIsQrModalOpen(false)
+        return
+      }
+
       const createdIdRaw = data?.instance?.instanceId ?? data?.instanceId
       const createdId = typeof createdIdRaw === 'string' ? createdIdRaw : undefined
       if (createdId) setCurrentInstanceId(createdId)
 
+      if (evolutionConn && !evolutionConn.id.startsWith('slot-')) {
+        await useConnectionsStore.getState().updateConnection(evolutionConn.id, {
+          connected: false,
+          instanceName,
+          instanceId: createdId,
+          evolutionOwnerJid: null,
+          evolutionProfileName: null,
+        })
+        await fetchConnections()
+      }
+
       if (data.qrcode?.base64) {
-        setQrBase64(data.qrcode.base64)
+        let b64 = data.qrcode.base64 as string
+        if (b64 && !b64.startsWith('data:')) b64 = `data:image/png;base64,${b64}`
+        setQrBase64(b64)
       } else {
-        await refreshEvolutionQr(instanceName, typeof createdId === 'string' ? createdId : undefined)
+        const qrOk = await refreshEvolutionQr(instanceName, createdId, { quiet: true })
+        if (!qrOk) {
+          alert(
+            'Instância criada na Evolution, mas o QR não foi obtido. Toque em "Gerar novo código" no modal ou verifique a API.'
+          )
+        }
       }
     } catch (err) {
       console.error(err)
@@ -355,7 +389,11 @@ export default function ConnectionsPage() {
     }
   }
 
-  const refreshEvolutionQr = async (instanceName: string, instanceId?: string | null) => {
+  const refreshEvolutionQr = async (
+    instanceName: string,
+    instanceId?: string | null,
+    opts?: { quiet?: boolean }
+  ): Promise<boolean> => {
     try {
       const qs = new URLSearchParams({ instance: instanceName })
       if (instanceId) qs.set('instanceId', instanceId)
@@ -367,12 +405,14 @@ export default function ConnectionsPage() {
             ? JSON.stringify((data.details as { message?: unknown }).message)
             : data.error || res.statusText
         console.error('[connect]', res.status, data)
-        alert(
-          `Evolution não gerou o QR (${res.status}).\n\n` +
-            `Se a instância foi apagada no servidor, crie outra em "Conectar com QR" ou escolha uma ativa em "Verificar instâncias".\n\n` +
-            `Detalhe: ${String(msg).slice(0, 200)}`
-        )
-        return
+        if (!opts?.quiet) {
+          alert(
+            `Evolution não gerou o QR (${res.status}).\n\n` +
+              `Se a instância foi apagada no servidor, será criada uma nova automaticamente ao fechar este aviso (use "Conectar com QR" de novo) ou use "Verificar instâncias".\n\n` +
+              `Detalhe: ${String(msg).slice(0, 200)}`
+          )
+        }
+        return false
       }
       let b64 = typeof data.base64 === 'string' ? data.base64 : ''
       if (b64 && !b64.startsWith('data:')) {
@@ -391,9 +431,14 @@ export default function ConnectionsPage() {
           await useConnectionsStore.getState().updateConnection(conn.id, { instanceId: keyUsed })
         }
       }
+
+      return Boolean(b64 || data.pairingCode)
     } catch (err) {
       console.error('Falha ao obter novo QR Code:', err)
-      alert('Falha de rede ao pedir QR à Evolution.')
+      if (!opts?.quiet) {
+        alert('Falha de rede ao pedir QR à Evolution.')
+      }
+      return false
     }
   }
 
@@ -649,7 +694,7 @@ export default function ConnectionsPage() {
         pairingCode={pairingCode}
         isConnecting={isConnecting}
         onRefreshQr={() =>
-          currentInstanceName && refreshEvolutionQr(currentInstanceName, currentInstanceId)
+          currentInstanceName && void refreshEvolutionQr(currentInstanceName, currentInstanceId)
         }
       />
 
