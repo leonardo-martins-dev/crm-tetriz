@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import {
-  EVOLUTION_WEBHOOK_EVENTS,
+  buildEvolutionInstanceWebhookConfig,
   resolveEvolutionWebhookTarget,
 } from '@/lib/evolution/resolve-webhook-target'
 
@@ -20,18 +20,12 @@ export async function POST(req: Request) {
 
     const webhookUrl = resolveEvolutionWebhookTarget(webhookPublicUrl || undefined)
 
-    /**
-     * Evolution API v2 Postman: webhook na raiz — webhookUrl, webhookByEvents, webhookBase64, webhookEvents
-     * (vide `Evolution API - v2.0.postman_collection.json` → Instance → Create Instance)
-     */
+    /** `InstanceDto.webhook` na Evolution atual (objeto aninhado; campos planos legados não preenchem o webhook). */
     const payload = {
       instanceName,
       integration: 'WHATSAPP-BAILEYS',
       qrcode: true,
-      webhookUrl,
-      webhookByEvents: true,
-      webhookBase64: false,
-      webhookEvents: [...EVOLUTION_WEBHOOK_EVENTS],
+      webhook: buildEvolutionInstanceWebhookConfig(webhookUrl),
     }
 
     const base = EVOLUTION_API_URL.replace(/\/$/, '')

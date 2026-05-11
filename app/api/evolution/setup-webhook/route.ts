@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { SupabaseConnectionRepository } from '@/backend/infrastructure/repositories/supabase-connection.repository'
 import {
-  EVOLUTION_WEBHOOK_EVENTS,
+  buildEvolutionSetWebhookRequestBody,
   resolveEvolutionWebhookTarget,
 } from '@/lib/evolution/resolve-webhook-target'
 
@@ -22,14 +22,7 @@ export async function POST(req: Request) {
 
     const WEBHOOK_TARGET = resolveEvolutionWebhookTarget(webhookPublicUrl || undefined)
 
-    /** Evolution API | v2.0 Postman — Webhook → Set Webhook */
-    const payload = {
-      enabled: true,
-      url: WEBHOOK_TARGET,
-      webhookByEvents: true,
-      webhookBase64: false,
-      events: [...EVOLUTION_WEBHOOK_EVENTS],
-    }
+    const payload = buildEvolutionSetWebhookRequestBody(WEBHOOK_TARGET)
 
     const base = EVOLUTION_API_URL.replace(/\/$/, '')
     const path = `/webhook/set/${encodeURIComponent(instanceName)}`
