@@ -74,11 +74,11 @@ export function WhatsAppQrModal({
             </div>
           )}
 
-          <Button 
-            variant="outline" 
-            className="w-full" 
+          <Button
+            variant="outline"
+            className="w-full"
             onClick={onRefreshQr}
-            disabled={!qrCodeBase64}
+            disabled={!onRefreshQr}
           >
             <RefreshCw className="w-4 h-4 mr-2" />
             Gerar novo código

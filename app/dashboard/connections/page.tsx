@@ -51,6 +51,8 @@ export default function ConnectionsPage() {
   const [qrBase64, setQrBase64] = useState<string | undefined>()
   const [pairingCode, setPairingCode] = useState<string | undefined>()
   const [currentInstanceName, setCurrentInstanceName] = useState<string | undefined>()
+  /** UUID Evolution — alguns servidores só aceitam /instance/connect/{id} */
+  const [currentInstanceId, setCurrentInstanceId] = useState<string | undefined>()
   const [isConnecting, setIsConnecting] = useState(false)
   const finishingRef = useRef(false)
 
@@ -315,12 +317,14 @@ export default function ConnectionsPage() {
       if (evolutionConn?.instanceName) {
         const instanceName = evolutionConn.instanceName
         setCurrentInstanceName(instanceName)
-        await refreshEvolutionQr(instanceName)
+        setCurrentInstanceId(evolutionConn.instanceId || undefined)
+        await refreshEvolutionQr(instanceName, evolutionConn.instanceId)
         return
       }
 
       const instanceName = `${tenantEvolutionPrefix(tenantId)}${Date.now()}`
       setCurrentInstanceName(instanceName)
+      setCurrentInstanceId(undefined)
 
       const res = await fetch('/api/evolution/create-instance', {
         method: 'POST',
@@ -333,10 +337,14 @@ export default function ConnectionsPage() {
       })
 
       const data = await res.json()
+      const createdIdRaw = data?.instance?.instanceId ?? data?.instanceId
+      const createdId = typeof createdIdRaw === 'string' ? createdIdRaw : undefined
+      if (createdId) setCurrentInstanceId(createdId)
+
       if (data.qrcode?.base64) {
         setQrBase64(data.qrcode.base64)
       } else {
-        await refreshEvolutionQr(instanceName)
+        await refreshEvolutionQr(instanceName, typeof createdId === 'string' ? createdId : undefined)
       }
     } catch (err) {
       console.error(err)
@@ -347,14 +355,34 @@ export default function ConnectionsPage() {
     }
   }
 
-  const refreshEvolutionQr = async (instanceName: string) => {
+  const refreshEvolutionQr = async (instanceName: string, instanceId?: string | null) => {
     try {
-      const res = await fetch(`/api/evolution/connect?instance=${instanceName}`)
+      const qs = new URLSearchParams({ instance: instanceName })
+      if (instanceId) qs.set('instanceId', instanceId)
+      const res = await fetch(`/api/evolution/connect?${qs}`)
       const data = await res.json()
-      if (data.base64) setQrBase64(data.base64)
+      if (!res.ok) {
+        const msg =
+          typeof data.details === 'object' && data.details !== null && 'message' in data.details
+            ? JSON.stringify((data.details as { message?: unknown }).message)
+            : data.error || res.statusText
+        console.error('[connect]', res.status, data)
+        alert(
+          `Evolution não gerou o QR (${res.status}).\n\n` +
+            `Se a instância foi apagada no servidor, crie outra em "Conectar com QR" ou escolha uma ativa em "Verificar instâncias".\n\n` +
+            `Detalhe: ${String(msg).slice(0, 200)}`
+        )
+        return
+      }
+      let b64 = typeof data.base64 === 'string' ? data.base64 : ''
+      if (b64 && !b64.startsWith('data:')) {
+        b64 = `data:image/png;base64,${b64}`
+      }
+      if (b64) setQrBase64(b64)
       if (data.pairingCode) setPairingCode(data.pairingCode)
     } catch (err) {
       console.error('Falha ao obter novo QR Code:', err)
+      alert('Falha de rede ao pedir QR à Evolution.')
     }
   }
 
@@ -609,7 +637,9 @@ export default function ConnectionsPage() {
         qrCodeBase64={qrBase64}
         pairingCode={pairingCode}
         isConnecting={isConnecting}
-        onRefreshQr={() => currentInstanceName && refreshEvolutionQr(currentInstanceName)}
+        onRefreshQr={() =>
+          currentInstanceName && refreshEvolutionQr(currentInstanceName, currentInstanceId)
+        }
       />
 
       <Modal
