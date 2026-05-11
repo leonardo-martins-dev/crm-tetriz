@@ -81,6 +81,8 @@ export async function handleIncomingMessage(
       channel: 'whatsapp',
       status: 'new',
       pipelineStage: 'Novo Lead',
+      tags: [],
+      notes: [],
       score: 0,
       priority: 'medium',
       window24hOpen: true,

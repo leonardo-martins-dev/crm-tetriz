@@ -168,9 +168,10 @@ export class EvolutionApiServiceImpl implements EvolutionApiService {
         apikey: params.apiKey,
       },
       body: JSON.stringify({
+        enabled: true,
         url: params.url,
-        webhook_by_events: true,
-        webhook_base64: false,
+        webhookByEvents: true,
+        webhookBase64: false,
         events: params.events,
       }),
     })

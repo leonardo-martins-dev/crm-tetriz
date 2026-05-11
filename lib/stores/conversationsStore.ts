@@ -34,8 +34,19 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
 
   initializeConversations: async (leads: Lead[]) => {
     const tenantId = useAuthStore.getState().user?.tenantId
-    if (!tenantId || leads.length === 0) return
-    
+    if (!tenantId) return
+
+    if (leads.length === 0) {
+      set({
+        messages: [],
+        conversations: [],
+        initialized: false,
+        selectedConversationId: null,
+        isLoading: false,
+      })
+      return
+    }
+
     set({ isLoading: true })
     try {
       const messages = await messageRepo.listByTenant(tenantId)

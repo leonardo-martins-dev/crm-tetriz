@@ -1,17 +1,38 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useLeadsStore } from '@/lib/stores/leadsStore'
+import { useConnectionsStore } from '@/lib/stores/connectionsStore'
+import { refreshWorkspaceData } from '@/lib/dashboard/refresh-workspace'
+import { cn } from '@/lib/utils'
 import { ChannelBadge } from '@/components/ChannelBadge'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Card, CardContent } from '@/components/ui/Card'
 import { formatRelativeTime } from '@/lib/utils'
-import { Search, Filter } from 'lucide-react'
+import { RefreshCw, Search } from 'lucide-react'
 
 export default function LeadsPage() {
+  const router = useRouter()
   const { leads, setSelectedLead } = useLeadsStore()
+  const evolutionConnected = useConnectionsStore((s) =>
+    s.connections.some((c) => c.provider === 'evolution' && c.connected)
+  )
+  const [isSyncing, setIsSyncing] = useState(false)
+
+  const handleSync = async () => {
+    setIsSyncing(true)
+    try {
+      await refreshWorkspaceData()
+    } catch (e) {
+      console.error(e)
+      alert('Não foi possível sincronizar. Verifique sua sessão e o Supabase.')
+    } finally {
+      setIsSyncing(false)
+    }
+  }
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedChannel, setSelectedChannel] = useState<string | null>(null)
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
@@ -152,15 +173,31 @@ export default function LeadsPage() {
             </div>
             {leads.length === 0 ? (
               <>
-                <h3 className="text-lg font-medium mb-1">Inicie sua operação</h3>
+                <h3 className="text-lg font-medium mb-1">
+                  {evolutionConnected ? 'Nenhum lead ainda' : 'Inicie sua operação'}
+                </h3>
                 <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                  Ainda não existem leads cadastrados. Conecte um canal de atendimento ou importe sua base.
+                  {evolutionConnected
+                    ? 'O WhatsApp está conectado ao CRM. Os leads aparecem quando chegam mensagens pelo canal ou quando você os cadastra.'
+                    : 'Ainda não existem leads cadastrados. Conecte um canal de atendimento ou importe sua base.'}
                 </p>
-                <div className="flex gap-2 mt-4">
-                  <Button onClick={() => window.location.href = '/dashboard/settings/connections'}>
-                    Conectar WhatsApp
-                  </Button>
-                  <Button variant="outline" onClick={() => useLeadsStore.getState().fetchLeads()}>
+                <div className="flex flex-wrap gap-2 mt-4 justify-center">
+                  {!evolutionConnected ? (
+                    <Button type="button" onClick={() => router.push('/dashboard/connections')}>
+                      Conectar WhatsApp
+                    </Button>
+                  ) : (
+                    <Button type="button" variant="outline" onClick={() => router.push('/dashboard/connections')}>
+                      Gerenciar conexão
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isSyncing}
+                    onClick={handleSync}
+                  >
+                    <RefreshCw className={cn('h-4 w-4 mr-2', isSyncing && 'animate-spin')} />
                     Sincronizar
                   </Button>
                 </div>

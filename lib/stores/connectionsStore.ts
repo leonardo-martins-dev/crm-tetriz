@@ -20,6 +20,10 @@ export interface Connection {
   instanceName?: string
   instanceId?: string
   evolutionApiKey?: string
+  evolutionOwnerJid?: string | null
+  evolutionProfileName?: string | null
+  evolutionWebhookUrl?: string | null
+  evolutionWebhookSyncedAt?: string | null
   // Common
   accountName?: string
   connectedAt?: string
@@ -33,7 +37,11 @@ interface ConnectionsState {
   updateConnection: (id: string, updates: Partial<Connection>) => Promise<void>
   getConnection: (id: string) => Connection | undefined
   getActiveConnection: () => Connection | undefined
-  connectEvolution: (instanceName: string, evolutionApiKey?: string) => Promise<void>
+  connectEvolution: (
+    instanceName: string,
+    evolutionApiKey?: string,
+    meta?: { ownerJid?: string; profileName?: string; instanceId?: string }
+  ) => Promise<void>
   ensureConnectionSlot: (provider: ConnectionProvider) => Promise<Connection | null>
   disconnectProvider: (id: string) => Promise<void>
 }
@@ -65,7 +73,11 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
           instanceName: row.instanceName,
           instanceId: row.instanceId,
           evolutionApiKey: row.evolutionApiKey,
-          accountName: row.instanceName,
+          evolutionOwnerJid: row.evolutionOwnerJid ?? undefined,
+          evolutionProfileName: row.evolutionProfileName ?? undefined,
+          evolutionWebhookUrl: row.evolutionWebhookUrl ?? undefined,
+          evolutionWebhookSyncedAt: row.evolutionWebhookSyncedAt ?? undefined,
+          accountName: row.evolutionProfileName || row.instanceName,
           connectedAt: row.createdAt,
           lastSync: new Date().toISOString(),
         })), 
@@ -87,6 +99,10 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
         instanceName: updates.instanceName,
         instanceId: updates.instanceId,
         evolutionApiKey: updates.evolutionApiKey,
+        evolutionOwnerJid: updates.evolutionOwnerJid as any,
+        evolutionProfileName: updates.evolutionProfileName as any,
+        evolutionWebhookUrl: updates.evolutionWebhookUrl as any,
+        evolutionWebhookSyncedAt: updates.evolutionWebhookSyncedAt as any,
         phoneNumberId: updates.phoneNumberId,
         wabaId: updates.wabaId,
       } as any)
@@ -109,21 +125,46 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
     return get().connections.find((conn) => conn.connected)
   },
 
-  connectEvolution: async (instanceName, evolutionApiKey) => {
+  connectEvolution: async (instanceName, evolutionApiKey, meta) => {
     const tenantId = useAuthStore.getState().user?.tenantId
     if (!tenantId) return
 
     const conn = get().connections.find(c => c.provider === 'evolution')
-    if (!conn) return
+    if (!conn) {
+      console.error('[connectEvolution] Sem linha provider=evolution no store — rode ensureConnectionSlot antes.')
+      return
+    }
 
     await get().updateConnection(conn.id, {
       connected: true,
       instanceName,
+      accountName: meta?.profileName || instanceName,
       ...(evolutionApiKey !== undefined ? { evolutionApiKey } : {}),
+      ...(meta?.ownerJid !== undefined ? { evolutionOwnerJid: meta.ownerJid } : {}),
+      ...(meta?.profileName !== undefined ? { evolutionProfileName: meta.profileName } : {}),
+      ...(meta?.instanceId !== undefined ? { instanceId: meta.instanceId } : {}),
       connectedAt: new Date().toISOString(),
-      accountName: instanceName,
       lastSync: new Date().toISOString(),
     })
+
+    if (typeof window !== 'undefined') {
+      try {
+        const res = await fetch('/api/evolution/setup-webhook', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            instanceName,
+            webhookPublicUrl: window.location.origin,
+          }),
+        })
+        if (!res.ok) {
+          const detail = await res.text()
+          console.warn('[connectEvolution] Falha ao registrar webhook na Evolution:', res.status, detail)
+        }
+      } catch (e) {
+        console.warn('[connectEvolution] setup-webhook:', e)
+      }
+    }
   },
 
   ensureConnectionSlot: async (provider) => {
@@ -161,6 +202,11 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
       accountName: undefined,
       instanceName: undefined,
       evolutionApiKey: undefined,
+      evolutionOwnerJid: null,
+      evolutionProfileName: null,
+      instanceId: undefined,
+      evolutionWebhookUrl: null,
+      evolutionWebhookSyncedAt: null,
       phoneNumberId: undefined,
       wabaId: undefined,
     })

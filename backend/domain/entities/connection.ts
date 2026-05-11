@@ -17,6 +17,12 @@ export interface Connection {
   instanceName?: string
   instanceId?: string
   evolutionApiKey?: string
+  /** Ex.: 5519982893861@s.whatsapp.net */
+  evolutionOwnerJid?: string | null
+  evolutionProfileName?: string | null
+  /** Última URL enviada para Evolution em webhook/set (mesma base para todos os tenants). */
+  evolutionWebhookUrl?: string | null
+  evolutionWebhookSyncedAt?: string | null
 
   status: ConnectionStatus
   createdAt: string

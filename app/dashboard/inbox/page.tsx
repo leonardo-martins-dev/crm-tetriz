@@ -1,24 +1,45 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useConversationsStore } from '@/lib/stores/conversationsStore'
 import { useLeadsStore } from '@/lib/stores/leadsStore'
+import { useConnectionsStore } from '@/lib/stores/connectionsStore'
+import { refreshWorkspaceData } from '@/lib/dashboard/refresh-workspace'
 import { useUsersStore } from '@/lib/stores/usersStore'
 import { useAgentsStore } from '@/lib/stores/agentsStore'
 import { ChannelBadge } from '@/components/ChannelBadge'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { formatRelativeTime } from '@/lib/utils'
+import { cn, formatRelativeTime } from '@/lib/utils'
 import { 
   Send, Clock, Lock, ChevronLeft, ChevronRight, Bot, User as UserIcon, 
   Paperclip, Image as ImageIcon, Music, Video, FileText, 
-  Check, CheckCheck, AlertCircle 
+  Check, CheckCheck, AlertCircle, RefreshCw
 } from 'lucide-react'
 import { LeadCard } from '@/components/LeadCard'
 import { useRef } from 'react'
 
 export default function InboxPage() {
+  const router = useRouter()
+  const evolutionConnected = useConnectionsStore((s) =>
+    s.connections.some((c) => c.provider === 'evolution' && c.connected)
+  )
+  const [isSyncing, setIsSyncing] = useState(false)
+
+  const handleWorkspaceSync = async () => {
+    setIsSyncing(true)
+    try {
+      await refreshWorkspaceData()
+    } catch (e) {
+      console.error(e)
+      alert('Não foi possível sincronizar.')
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
   const { 
     conversations, 
     selectedConversationId, 
@@ -207,18 +228,44 @@ export default function InboxPage() {
                 <Bot className="h-6 w-6 text-muted-foreground" />
               </div>
               <h3 className="text-sm font-medium">Nenhuma conversa</h3>
-              <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">
-                As conversas aparecerão aqui assim que seus leads entrarem em contato.
+              <p className="text-xs text-muted-foreground mt-1 max-w-[220px]">
+                {evolutionConnected
+                  ? 'WhatsApp conectado. As conversas aparecem quando houver leads e mensagens no canal.'
+                  : 'As conversas aparecerão aqui assim que seus leads entrarem em contato.'}
               </p>
-              {leads.length === 0 && (
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+              {!evolutionConnected ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
                   className="mt-4 text-xs"
-                  onClick={() => window.location.href = '/dashboard/settings/connections'}
+                  onClick={() => router.push('/dashboard/connections')}
                 >
-                  Configurar Conexão
+                  Configurar conexão
                 </Button>
+              ) : (
+                <div className="flex flex-col gap-2 mt-4 w-full max-w-[220px]">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    className="text-xs"
+                    disabled={isSyncing}
+                    onClick={handleWorkspaceSync}
+                  >
+                    <RefreshCw className={cn('h-3 w-3 mr-2', isSyncing && 'animate-spin')} />
+                    Atualizar inbox
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    type="button"
+                    className="text-xs text-muted-foreground"
+                    onClick={() => router.push('/dashboard/connections')}
+                  >
+                    Ver conexões
+                  </Button>
+                </div>
               )}
             </div>
           )}

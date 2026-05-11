@@ -3,104 +3,156 @@ import { handleIncomingMessage } from '@/backend/application/use-cases/whatsapp/
 import { handleMessageStatusUpdate } from '@/backend/application/use-cases/whatsapp/handle-message-status-update'
 import { createContainer } from '@/backend/infrastructure/container'
 import { createClient } from '@supabase/supabase-js'
+import {
+  isEvolutionMessagesUpdate,
+  isEvolutionMessagesUpsert,
+  splitEvolutionMessagesUpsert,
+} from '@/lib/evolution/normalize-webhook'
+
+function extractLegacyUpsertPayload(body: Record<string, unknown>) {
+  const instanceName = (body.instance ?? body.instanceName) as string | undefined
+  const data = body.data as Record<string, unknown> | undefined
+  if (!instanceName || !data || typeof data !== 'object') return null
+  return { instanceName, data }
+}
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json()
-    console.log('Webhook Evolution Evento:', body.event)
+    const body = (await req.json()) as Record<string, unknown>
+    const rawEvent = body.event
+    console.log('[Evolution webhook] event=', rawEvent)
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!, 
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
+    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
     const container = createContainer(supabase)
 
-    // 1. Evento de Nova Mensagem
-    if (body.event === 'messages.upsert') {
-      const { instance, data } = body
-      
-      // Ignorar mensagens enviadas por nos mesmos
-      if (data.key?.fromMe) {
-        return NextResponse.json({ success: true, reason: 'from_me' })
+    // ─── Nova mensagem (vários formatos de nome + payload único ou em lote) ───
+    if (isEvolutionMessagesUpsert(rawEvent)) {
+      let chunks = splitEvolutionMessagesUpsert(body)
+      if (chunks.length === 0) {
+        const legacy = extractLegacyUpsertPayload(body)
+        if (legacy) chunks = [{ instanceName: legacy.instanceName, data: legacy.data }]
       }
 
-      // Tratar numero
-      let from = data.key?.remoteJid || ''
-      if (from.includes('@')) {
-        from = from.split('@')[0]
+      if (chunks.length === 0) {
+        console.warn('[Evolution webhook] MESSAGES_UPSERT sem dados reconhecíveis', JSON.stringify(body).slice(0, 500))
+        return NextResponse.json({ success: false, reason: 'upsert_no_payload' }, { status: 400 })
       }
 
-      const msgData = data.message || {}
-      
-      // Extrair texto (pode estar em varios lugares)
-      const text = msgData.conversation || 
-                   msgData.extendedTextMessage?.text || 
-                   msgData.imageMessage?.caption || 
-                   msgData.videoMessage?.caption || 
-                   msgData.documentMessage?.caption || 
-                   ''
+      const results: string[] = []
+      for (const { instanceName, data } of chunks) {
+        const key = data.key as Record<string, unknown> | undefined
+        if (key?.fromMe) {
+          results.push('from_me')
+          continue
+        }
 
-      // Extrair mídia se existir
-      let media: any = undefined
-      if (msgData.imageMessage) {
-        media = { type: 'image', url: msgData.imageMessage.url, mimetype: msgData.imageMessage.mimetype, base64: msgData.base64 }
-      } else if (msgData.audioMessage) {
-        media = { type: 'audio', url: msgData.audioMessage.url, mimetype: msgData.audioMessage.mimetype, base64: msgData.base64 }
-      } else if (msgData.videoMessage) {
-        media = { type: 'video', url: msgData.videoMessage.url, mimetype: msgData.videoMessage.mimetype, base64: msgData.base64 }
-      } else if (msgData.documentMessage) {
-        media = { 
-          type: 'document', 
-          url: msgData.documentMessage.url, 
-          mimetype: msgData.documentMessage.mimetype, 
-          base64: msgData.base64,
-          fileName: msgData.documentMessage.fileName || msgData.documentMessage.title
+        let from = String(key?.remoteJid ?? '')
+        if (from.endsWith('@g.us')) {
+          results.push('group_skipped')
+          continue
+        }
+        if (from.includes('@')) {
+          from = from.split('@')[0] || ''
+        }
+
+        const msgData = (data.message || {}) as Record<string, unknown>
+
+        const text =
+          String(msgData.conversation ?? '') ||
+          String((msgData.extendedTextMessage as Record<string, unknown> | undefined)?.text ?? '') ||
+          String((msgData.imageMessage as Record<string, unknown> | undefined)?.caption ?? '') ||
+          String((msgData.videoMessage as Record<string, unknown> | undefined)?.caption ?? '') ||
+          String((msgData.documentMessage as Record<string, unknown> | undefined)?.caption ?? '') ||
+          ''
+
+        let media: any = undefined
+        if (msgData.imageMessage) {
+          const im = msgData.imageMessage as Record<string, unknown>
+          media = {
+            type: 'image',
+            url: im.url,
+            mimetype: im.mimetype,
+            base64: msgData.base64,
+          }
+        } else if (msgData.audioMessage) {
+          const am = msgData.audioMessage as Record<string, unknown>
+          media = {
+            type: 'audio',
+            url: am.url,
+            mimetype: am.mimetype,
+            base64: msgData.base64,
+          }
+        } else if (msgData.videoMessage) {
+          const vm = msgData.videoMessage as Record<string, unknown>
+          media = {
+            type: 'video',
+            url: vm.url,
+            mimetype: vm.mimetype,
+            base64: msgData.base64,
+          }
+        } else if (msgData.documentMessage) {
+          const dm = msgData.documentMessage as Record<string, unknown>
+          media = {
+            type: 'document',
+            url: dm.url,
+            mimetype: dm.mimetype,
+            base64: msgData.base64,
+            fileName: dm.fileName || dm.title,
+          }
+        }
+
+        const payload = {
+          instanceName,
+          from,
+          messageId: String(key?.id ?? ''),
+          text,
+          timestamp: String(data.messageTimestamp ?? Date.now()),
+          senderName: String(data.pushName ?? from),
+          media,
+        }
+
+        try {
+          await handleIncomingMessage(payload, container)
+          results.push('ok')
+        } catch (err) {
+          console.error('[Evolution webhook] Erro ao processar mensagem:', err)
+          results.push(`err:${String(err)}`)
         }
       }
 
-      const payload = {
-        instanceName: instance, 
-        from,
-        messageId: data.key?.id || '',
-        text,
-        timestamp: String(data.messageTimestamp || Date.now()),
-        senderName: data.pushName || from,
-        media
-      }
-
-      try {
-        await handleIncomingMessage(payload, container)
-        return NextResponse.json({ success: true })
-      } catch (err) {
-        console.error('Erro ao processar mensagem Evolution:', err)
-        return NextResponse.json({ success: false, error: String(err) }, { status: 500 })
-      }
+      const failed = results.some((r) => r.startsWith('err:'))
+      return NextResponse.json({ success: !failed, results })
     }
 
-    // 2. Evento de Atualização de Mensagem (Status)
-    if (body.event === 'messages.update') {
-      const { instance, data } = body
-      
-      // Sincronizar status (entregue, lida, etc)
-      // data.update pode conter status: 2 (enviado), 3 (entregue), 4 (lido)
-      if (data.key?.id && data.update?.status) {
+    // ─── Atualização de status ───
+    if (isEvolutionMessagesUpdate(rawEvent)) {
+      const instance = (body.instance ?? body.instanceName) as string | undefined
+      const data = body.data as Record<string, unknown> | undefined
+      const key = data?.key as Record<string, unknown> | undefined
+      const update = data?.update as Record<string, unknown> | undefined
+
+      if (instance && key?.id && update?.status != null) {
         try {
-          // Precisamos do tenantId. Vamos buscar pela conexao vinculada a instancia.
           const connection = await container.connectionRepo.findByInstanceName(instance)
           if (connection) {
-            await handleMessageStatusUpdate(connection.tenantId, {
-              wamid: data.key.id,
-              status: data.update.status
-            }, container)
+            await handleMessageStatusUpdate(
+              connection.tenantId,
+              {
+                wamid: String(key.id),
+                status: update.status as any,
+              },
+              container
+            )
           }
         } catch (err) {
-          console.error('Erro ao atualizar status Evolution:', err)
+          console.error('[Evolution webhook] Erro ao atualizar status:', err)
         }
       }
       return NextResponse.json({ success: true })
     }
 
-    return NextResponse.json({ success: true })
+    console.warn('[Evolution webhook] Evento não tratado:', rawEvent)
+    return NextResponse.json({ success: true, ignored: true })
   } catch (error) {
     console.error('Webhook error:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })

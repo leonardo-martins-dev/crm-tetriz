@@ -1,40 +1,52 @@
 import { NextResponse } from 'next/server'
-import { createContainer } from '@/backend/infrastructure/container'
-import { createClient } from '@supabase/supabase-js'
+import {
+  EVOLUTION_WEBHOOK_EVENTS,
+  resolveEvolutionWebhookTarget,
+} from '@/lib/evolution/resolve-webhook-target'
 
 export async function POST(req: Request) {
   try {
-    const { instanceName } = await req.json()
+    const body = await req.json()
+    const instanceName = body.instanceName as string | undefined
+    const webhookPublicUrl =
+      typeof body.webhookPublicUrl === 'string' ? body.webhookPublicUrl.trim() : ''
 
     if (!instanceName) {
       return NextResponse.json({ error: 'Instance name is required' }, { status: 400 })
     }
 
-    // TODO: Usar cliente Supabase autenticado quando tivermos sessão
-    // const supabase = createClient(...)
-    // const container = createContainer(supabase)
-
-    // Simulando o EvolutionApiService
     const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || 'http://localhost:8080'
     const GLOBAL_API_KEY = process.env.EVOLUTION_API_KEY || 'mude-me'
 
-    const url = `${EVOLUTION_API_URL}/instance/create`
-    const response = await fetch(url, {
+    const webhookUrl = resolveEvolutionWebhookTarget(webhookPublicUrl || undefined)
+
+    /**
+     * Evolution API v2 Postman: webhook na raiz — webhookUrl, webhookByEvents, webhookBase64, webhookEvents
+     * (vide `Evolution API - v2.0.postman_collection.json` → Instance → Create Instance)
+     */
+    const payload = {
+      instanceName,
+      integration: 'WHATSAPP-BAILEYS',
+      qrcode: true,
+      webhookUrl,
+      webhookByEvents: true,
+      webhookBase64: false,
+      webhookEvents: [...EVOLUTION_WEBHOOK_EVENTS],
+    }
+
+    const base = EVOLUTION_API_URL.replace(/\/$/, '')
+    const response = await fetch(`${base}/instance/create`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         apikey: GLOBAL_API_KEY,
       },
-      body: JSON.stringify({
-        instanceName,
-        integration: 'WHATSAPP-BAILEYS',
-        qrcode: true,
-      }),
+      body: JSON.stringify(payload),
     })
 
     if (!response.ok) {
       const errorBody = await response.text()
-      console.error('Evolution API erro:', errorBody)
+      console.error('[create-instance] Evolution:', response.status, errorBody)
       return NextResponse.json(
         { error: 'Failed to create instance in Evolution API', details: errorBody },
         { status: response.status }

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { isEvolutionRawConnectionOpen } from '@/lib/evolution/evolution-instances'
 
 export async function GET(req: Request) {
   try {
@@ -32,7 +33,27 @@ export async function GET(req: Request) {
     }
 
     const data = await response.json()
-    return NextResponse.json(data)
+    const open = isEvolutionRawConnectionOpen(data)
+
+    const instanceBase =
+      data?.instance && typeof data.instance === 'object' && data.instance !== null
+        ? ({ ...(data.instance as Record<string, unknown>) } as Record<string, unknown>)
+        : ({} as Record<string, unknown>)
+
+    const preserved =
+      typeof instanceBase.state === 'string'
+        ? instanceBase.state
+        : typeof instanceBase.status === 'string'
+          ? instanceBase.status
+          : 'close'
+
+    return NextResponse.json({
+      ...data,
+      instance: {
+        ...instanceBase,
+        state: open ? 'open' : preserved,
+      },
+    })
   } catch (error) {
     console.error('Erro na API state:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -40,7 +61,5 @@ export async function GET(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  // Chamada aqui vai atualizar o ConnectionStatus no Supabase para 'active'
-  // TODO: implementar a chamada ao repo de connection quando a autenticação existir
   return NextResponse.json({ success: true, message: 'Status updated' })
 }

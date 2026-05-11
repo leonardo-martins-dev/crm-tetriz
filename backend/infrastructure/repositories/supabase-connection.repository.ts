@@ -100,6 +100,10 @@ export class SupabaseConnectionRepository implements ConnectionRepository {
       instanceName: row.instance_name,
       instanceId: row.instance_id,
       evolutionApiKey: row.evolution_api_key,
+      evolutionOwnerJid: row.evolution_owner_jid ?? undefined,
+      evolutionProfileName: row.evolution_profile_name ?? undefined,
+      evolutionWebhookUrl: row.evolution_webhook_url ?? undefined,
+      evolutionWebhookSyncedAt: row.evolution_webhook_synced_at ?? undefined,
       status: row.status as ConnectionStatus,
       createdAt: row.created_at,
     }
@@ -116,6 +120,11 @@ export class SupabaseConnectionRepository implements ConnectionRepository {
     if (entity.instanceName !== undefined) row.instance_name = entity.instanceName
     if (entity.instanceId !== undefined) row.instance_id = entity.instanceId
     if (entity.evolutionApiKey !== undefined) row.evolution_api_key = entity.evolutionApiKey
+    if (entity.evolutionOwnerJid !== undefined) row.evolution_owner_jid = entity.evolutionOwnerJid
+    if (entity.evolutionProfileName !== undefined) row.evolution_profile_name = entity.evolutionProfileName
+    if (entity.evolutionWebhookUrl !== undefined) row.evolution_webhook_url = entity.evolutionWebhookUrl
+    if (entity.evolutionWebhookSyncedAt !== undefined)
+      row.evolution_webhook_synced_at = entity.evolutionWebhookSyncedAt
     if (entity.status !== undefined) row.status = entity.status
     return row
   }

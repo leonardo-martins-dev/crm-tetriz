@@ -1,13 +1,27 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useConnectionsStore, Connection } from '@/lib/stores/connectionsStore'
 import { useAuthStore } from '@/lib/stores/authStore'
+import {
+  extractInstanceTimeSuffix,
+  formatWhatsAppPhoneFromJid,
+  isEvolutionInstanceConnected,
+  isEvolutionRawConnectionOpen,
+  parseFetchInstancesBody,
+  partitionInstancesByVerifiedOpen,
+  pickCanonicalEvolutionInstance,
+  tenantEvolutionPrefix,
+  type EvolutionInstanceRow,
+} from '@/lib/evolution/evolution-instances'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
-import { Check, X, RefreshCw, QrCode } from 'lucide-react'
+import { Check, X, RefreshCw, QrCode, Server } from 'lucide-react'
 import { WhatsAppQrModal } from '@/components/WhatsAppQrModal'
+import { Modal } from '@/components/ui/Modal'
+import { refreshWorkspaceData } from '@/lib/dashboard/refresh-workspace'
+import { cn } from '@/lib/utils'
 
 const PROVIDERS = ['evolution'] as const
 
@@ -38,6 +52,17 @@ export default function ConnectionsPage() {
   const [pairingCode, setPairingCode] = useState<string | undefined>()
   const [currentInstanceName, setCurrentInstanceName] = useState<string | undefined>()
   const [isConnecting, setIsConnecting] = useState(false)
+  const finishingRef = useRef(false)
+
+  const [instancePickerOpen, setInstancePickerOpen] = useState(false)
+  const [instancePickerLoading, setInstancePickerLoading] = useState(false)
+  const [instancePickerConnecting, setInstancePickerConnecting] = useState(false)
+  const [instancePickerActive, setInstancePickerActive] = useState<EvolutionInstanceRow[]>([])
+  const [instancePickerInactive, setInstancePickerInactive] = useState<EvolutionInstanceRow[]>([])
+  const [selectedInstanceName, setSelectedInstanceName] = useState<string | null>(null)
+  const [instancePickerError, setInstancePickerError] = useState<string | null>(null)
+
+  const [isWorkspaceSyncing, setIsWorkspaceSyncing] = useState(false)
 
   const tenantId = user?.tenantId ?? ''
 
@@ -60,6 +85,150 @@ export default function ConnectionsPage() {
     if (user?.tenantId) fetchConnections()
   }, [user?.tenantId, fetchConnections])
 
+  /**
+   * Lista instâncias do tenant na Evolution, confere connection-state e associa ao CRM
+   * a que está realmente aberta (evita criar nova quando já existe uma Connected).
+   */
+  const adoptConnectedTenantInstance = useCallback(
+    async (notify: boolean): Promise<boolean> => {
+      if (!tenantId) return false
+
+      let instances: EvolutionInstanceRow[] = []
+      try {
+        const res = await fetch('/api/evolution/fetch-instances')
+        if (!res.ok) return false
+        instances = parseFetchInstancesBody(await res.json())
+      } catch {
+        return false
+      }
+
+      const prefix = tenantEvolutionPrefix(tenantId)
+      const ours = instances.filter((i) => i.instanceName.toLowerCase().startsWith(prefix.toLowerCase()))
+      if (ours.length === 0) return false
+
+      const { verifiedOpen } = await partitionInstancesByVerifiedOpen(ours, (name) =>
+        fetch(`/api/evolution/connection-state?instance=${encodeURIComponent(name)}`).then((r) => r.json())
+      )
+
+      if (verifiedOpen.length === 0) return false
+
+      verifiedOpen.sort(
+        (a, b) => extractInstanceTimeSuffix(b.instanceName) - extractInstanceTimeSuffix(a.instanceName)
+      )
+      const best = verifiedOpen[0]
+
+      const crm = useConnectionsStore.getState().connections.find((c) => c.provider === 'evolution')
+      if (crm?.connected && crm.instanceName === best.instanceName) {
+        return false
+      }
+
+      await connectEvolution(best.instanceName, undefined, {
+        ownerJid: best.owner || undefined,
+        profileName: best.profileName || undefined,
+        instanceId: best.instanceId || undefined,
+      })
+      await fetchConnections()
+
+      if (notify) {
+        alert(
+          `Já existe uma instância Evolution conectada para este tenant. O CRM foi associado a ela (sem criar outra).\n\nInstância: ${best.instanceName}` +
+            (best.profileName ? `\nPerfil: ${best.profileName}` : '') +
+            (best.owner ? `\nNúmero: ${formatWhatsAppPhoneFromJid(best.owner)}` : '')
+        )
+      }
+
+      return true
+    },
+    [tenantId, connectEvolution, fetchConnections]
+  )
+
+  const loadInstancePickerData = useCallback(async () => {
+    if (!tenantId) return
+    setInstancePickerLoading(true)
+    setInstancePickerError(null)
+    try {
+      const res = await fetch('/api/evolution/fetch-instances')
+      if (!res.ok) {
+        throw new Error(`Evolution retornou ${res.status}`)
+      }
+      const instances = parseFetchInstancesBody(await res.json())
+      const prefix = tenantEvolutionPrefix(tenantId)
+      const ours = instances.filter((i) => i.instanceName.toLowerCase().startsWith(prefix.toLowerCase()))
+
+      const { verifiedOpen, notOpen } = await partitionInstancesByVerifiedOpen(ours, (name) =>
+        fetch(`/api/evolution/connection-state?instance=${encodeURIComponent(name)}`).then((r) => r.json())
+      )
+
+      verifiedOpen.sort(
+        (a, b) => extractInstanceTimeSuffix(b.instanceName) - extractInstanceTimeSuffix(a.instanceName)
+      )
+
+      setInstancePickerActive(verifiedOpen)
+      setInstancePickerInactive(notOpen)
+      setSelectedInstanceName(verifiedOpen[0]?.instanceName ?? null)
+    } catch (e) {
+      setInstancePickerError(e instanceof Error ? e.message : 'Não foi possível listar as instâncias.')
+      setInstancePickerActive([])
+      setInstancePickerInactive([])
+      setSelectedInstanceName(null)
+    } finally {
+      setInstancePickerLoading(false)
+    }
+  }, [tenantId])
+
+  const openInstancePicker = async () => {
+    if (!tenantId) {
+      alert('Sessão sem tenant. Faça login novamente.')
+      return
+    }
+    const ensured = await ensureConnectionSlot('evolution')
+    if (!ensured) {
+      alert(
+        'Não foi possível criar o registro de conexão Evolution no banco. Verifique permissões (RLS) e o schema da tabela connections.'
+      )
+      return
+    }
+    setInstancePickerOpen(true)
+    await loadInstancePickerData()
+  }
+
+  const confirmConnectSelectedInstance = async () => {
+    if (!selectedInstanceName) return
+    const row = instancePickerActive.find((i) => i.instanceName === selectedInstanceName)
+    if (!row) return
+
+    setInstancePickerConnecting(true)
+    try {
+      await connectEvolution(row.instanceName, undefined, {
+        ownerJid: row.owner || undefined,
+        profileName: row.profileName || undefined,
+        instanceId: row.instanceId || undefined,
+      })
+      await fetchConnections()
+      setInstancePickerOpen(false)
+    } catch (e) {
+      console.error(e)
+      alert('Não foi possível associar esta instância ao CRM.')
+    } finally {
+      setInstancePickerConnecting(false)
+    }
+  }
+
+  /** Ao abrir a página: alinha CRM com instância já Connected na Evolution (sem alert) */
+  useEffect(() => {
+    if (!tenantId) return
+    let cancelled = false
+    ;(async () => {
+      await fetchConnections()
+      if (cancelled) return
+      const adopted = await adoptConnectedTenantInstance(false)
+      if (!cancelled && adopted) await fetchConnections()
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [tenantId, fetchConnections, adoptConnectedTenantInstance])
+
   const handleConnectEvolution = async () => {
     const ensured = await ensureConnectionSlot('evolution')
     if (!ensured) {
@@ -68,7 +237,56 @@ export default function ConnectionsPage() {
       )
       return
     }
-    startEvolutionConnection()
+    await fetchConnections()
+
+    const reused = await reconcileEvolutionBeforeQr()
+    if (reused) return
+
+    await startEvolutionConnection()
+  }
+
+  /** Antes de abrir QR: adota instância já Connected na Evolution; fallback se lista vier incompleta */
+  const reconcileEvolutionBeforeQr = async (): Promise<boolean> => {
+    if (!tenantId) return false
+
+    if (await adoptConnectedTenantInstance(true)) return true
+
+    let instances: EvolutionInstanceRow[] = []
+    try {
+      const res = await fetch('/api/evolution/fetch-instances')
+      if (res.ok) instances = parseFetchInstancesBody(await res.json())
+    } catch {
+      return false
+    }
+
+    const evolutionConn = useConnectionsStore.getState().connections.find((c) => c.provider === 'evolution')
+
+    if (evolutionConn?.instanceName && !evolutionConn.connected) {
+      const row = instances.find((i) => i.instanceName === evolutionConn.instanceName)
+      const looksOpen =
+        row && isEvolutionInstanceConnected(row.status)
+          ? true
+          : await fetch(
+              `/api/evolution/connection-state?instance=${encodeURIComponent(evolutionConn.instanceName)}`
+            )
+              .then((r) => r.json())
+              .then((j) => isEvolutionRawConnectionOpen(j))
+
+      if (looksOpen) {
+        await connectEvolution(evolutionConn.instanceName, undefined, {
+          ownerJid: row?.owner || undefined,
+          profileName: row?.profileName || undefined,
+          instanceId: row?.instanceId || undefined,
+        })
+        await fetchConnections()
+        alert(
+          'Conexão recuperada: a instância já estava ativa na Evolution. Você pode usar o WhatsApp normalmente.'
+        )
+        return true
+      }
+    }
+
+    return false
   }
 
   const startEvolutionConnection = async () => {
@@ -78,19 +296,42 @@ export default function ConnectionsPage() {
     }
 
     setIsConnecting(true)
-    setIsQrModalOpen(true)
     setQrBase64(undefined)
-    
+    finishingRef.current = false
+
+    await fetchConnections()
+
     try {
-      const instanceName = `crm-${tenantId.slice(0, 8)}-${Date.now()}`
+      if (await adoptConnectedTenantInstance(true)) {
+        setIsConnecting(false)
+        return
+      }
+
+      setIsQrModalOpen(true)
+
+      const evolutionConn = useConnectionsStore.getState().connections.find((c) => c.provider === 'evolution')
+
+      // Reutiliza nome da instância já cadastrada → mesmo número reconecta via GET connect (doc Instance Connect)
+      if (evolutionConn?.instanceName) {
+        const instanceName = evolutionConn.instanceName
+        setCurrentInstanceName(instanceName)
+        await refreshEvolutionQr(instanceName)
+        return
+      }
+
+      const instanceName = `${tenantEvolutionPrefix(tenantId)}${Date.now()}`
       setCurrentInstanceName(instanceName)
-      
+
       const res = await fetch('/api/evolution/create-instance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ instanceName })
+        body: JSON.stringify({
+          instanceName,
+          webhookPublicUrl:
+            typeof window !== 'undefined' ? window.location.origin : undefined,
+        }),
       })
-      
+
       const data = await res.json()
       if (data.qrcode?.base64) {
         setQrBase64(data.qrcode.base64)
@@ -117,32 +358,101 @@ export default function ConnectionsPage() {
     }
   }
 
-  // Polling para checar state
+  // Polling: não depende só do modal (quem fecha o modal após escanear ainda precisa sincronizar)
   useEffect(() => {
-    if (!isQrModalOpen || !currentInstanceName) return
+    if (!currentInstanceName) return
 
-    const interval = setInterval(async () => {
+    const tryFinish = async () => {
+      if (finishingRef.current || !currentInstanceName) return
       try {
-        const res = await fetch(`/api/evolution/connection-state?instance=${currentInstanceName}`)
+        const res = await fetch(
+          `/api/evolution/connection-state?instance=${encodeURIComponent(currentInstanceName)}`
+        )
         const data = await res.json()
-        
-        if (data?.instance?.state === 'open') {
-          // Conectado!
-          setIsQrModalOpen(false)
-          connectEvolution(currentInstanceName)
-          // Configura webhook e events na API Real..
-          await fetch('/api/evolution/setup-webhook', {
-            method: 'POST',
-            body: JSON.stringify({ instanceName: currentInstanceName })
-          })
-        }
-      } catch (e) {
-        console.error('Erro no polling:', e)
-      }
-    }, 5000)
+        if (!isEvolutionRawConnectionOpen(data)) return
+        if (finishingRef.current) return
+        finishingRef.current = true
+        setIsQrModalOpen(false)
 
+        let instances: EvolutionInstanceRow[] = []
+        try {
+          const fi = await fetch('/api/evolution/fetch-instances')
+          if (fi.ok) {
+            instances = parseFetchInstancesBody(await fi.json())
+          }
+        } catch {
+          /* ignore */
+        }
+
+        const detail = instances.find((i) => i.instanceName === currentInstanceName)
+        const ownerJid = detail?.owner || ''
+        const dbEv = useConnectionsStore.getState().connections.find((c) => c.provider === 'evolution')
+
+        let targetName = currentInstanceName
+        let meta = {
+          ownerJid: detail?.owner || undefined,
+          profileName: detail?.profileName || undefined,
+          instanceId: detail?.instanceId || undefined,
+        }
+
+        if (ownerJid) {
+          const { canonicalName, redundantNames } = pickCanonicalEvolutionInstance({
+            instances,
+            currentName: currentInstanceName,
+            ownerJid,
+            dbInstanceName: dbEv?.instanceName,
+          })
+          const prefix = tenantEvolutionPrefix(tenantId)
+          const safeRedundant = redundantNames.filter((n) =>
+            n.toLowerCase().startsWith(prefix.toLowerCase())
+          )
+
+          for (const name of safeRedundant) {
+            try {
+              await fetch(`/api/evolution/delete-instance?instance=${encodeURIComponent(name)}`, {
+                method: 'DELETE',
+              })
+            } catch {
+              /* ignore */
+            }
+          }
+
+          if (canonicalName !== currentInstanceName) {
+            const canonDetail = instances.find((i) => i.instanceName === canonicalName)
+            targetName = canonicalName
+            meta = {
+              ownerJid: canonDetail?.owner || meta.ownerJid,
+              profileName: canonDetail?.profileName || meta.profileName,
+              instanceId: canonDetail?.instanceId || meta.instanceId,
+            }
+            alert(
+              `Este WhatsApp já estava vinculado à instância "${canonicalName}". A instância duplicada foi encerrada na Evolution.`
+            )
+          }
+        }
+
+        await connectEvolution(targetName, undefined, meta)
+        await fetchConnections()
+
+        const evAfter = useConnectionsStore.getState().connections.find((c) => c.provider === 'evolution')
+        if (!evAfter?.connected) {
+          console.error(
+            '[Evolution sync] O CRM não gravou "Conectado". Verifique RLS no Supabase, migration da tabela connections e o console em updateConnection.'
+          )
+        }
+
+        setCurrentInstanceName(undefined)
+        finishingRef.current = false
+      } catch (e) {
+        console.error('Erro ao sincronizar conexão Evolution:', e)
+        finishingRef.current = false
+      }
+    }
+
+    tryFinish()
+    const interval = setInterval(tryFinish, 3000)
     return () => clearInterval(interval)
-  }, [isQrModalOpen, currentInstanceName, connectEvolution])
+  }, [currentInstanceName, connectEvolution, fetchConnections])
 
   const handleDisconnect = async (conn: Connection) => {
     if (conn.id.startsWith('slot-')) return
@@ -157,9 +467,16 @@ export default function ConnectionsPage() {
     disconnectProvider(conn.id)
   }
 
-  const handleSync = (conn: unknown) => {
-    console.log(conn)
-    alert('Sincronizando...')
+  const handleSync = async (_conn: Connection) => {
+    setIsWorkspaceSyncing(true)
+    try {
+      await refreshWorkspaceData()
+    } catch (e) {
+      console.error(e)
+      alert('Não foi possível sincronizar leads e conversas. Verifique o Supabase e tente de novo.')
+    } finally {
+      setIsWorkspaceSyncing(false)
+    }
   }
 
   return (
@@ -173,7 +490,7 @@ export default function ConnectionsPage() {
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {displayConnections.map((connection) => {
-          const config = connectionConfig[connection.provider]
+          const config = connectionConfig[connection.provider as keyof typeof connectionConfig]
           const Icon = config.icon
 
           return (
@@ -203,10 +520,38 @@ export default function ConnectionsPage() {
               <CardContent className="space-y-4 pt-4">
                 {connection.connected ? (
                   <>
-                    {connection.accountName && (
+                    {connection.instanceName && (
                       <div className="space-y-1">
-                        <p className="text-xs text-muted-foreground">Conta conectada:</p>
-                        <p className="text-sm font-medium">{connection.accountName}</p>
+                        <p className="text-xs text-muted-foreground">Instância Evolution</p>
+                        <p className="text-sm font-mono break-all">{connection.instanceName}</p>
+                      </div>
+                    )}
+                    {connection.evolutionWebhookUrl && (
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">URL do webhook (igual para todos os tenants)</p>
+                        <p className="text-xs font-mono break-all text-muted-foreground">
+                          {connection.evolutionWebhookUrl}
+                        </p>
+                        {connection.evolutionWebhookSyncedAt && (
+                          <p className="text-[10px] text-muted-foreground">
+                            Gravado no Supabase em{' '}
+                            {new Date(connection.evolutionWebhookSyncedAt).toLocaleString('pt-BR')}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {(connection.accountName || connection.evolutionProfileName) && (
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">Perfil WhatsApp</p>
+                        <p className="text-sm font-medium">
+                          {connection.evolutionProfileName || connection.accountName}
+                        </p>
+                      </div>
+                    )}
+                    {connection.evolutionOwnerJid && (
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">Número</p>
+                        <p className="text-sm">{formatWhatsAppPhoneFromJid(connection.evolutionOwnerJid)}</p>
                       </div>
                     )}
                     {connection.connectedAt && (
@@ -222,9 +567,11 @@ export default function ConnectionsPage() {
                         variant="outline"
                         size="sm"
                         className="flex-1"
+                        type="button"
+                        disabled={isWorkspaceSyncing}
                         onClick={() => handleSync(connection)}
                       >
-                        <RefreshCw className="h-4 w-4 mr-2" />
+                        <RefreshCw className={cn('h-4 w-4 mr-2', isWorkspaceSyncing && 'animate-spin')} />
                         Sincronizar
                       </Button>
                       <Button
@@ -239,10 +586,16 @@ export default function ConnectionsPage() {
                     </div>
                   </>
                 ) : (
-                  <Button className="w-full" onClick={handleConnectEvolution}>
-                    <Check className="h-4 w-4 mr-2" />
-                    {config.connectLabel}
-                  </Button>
+                  <div className="flex flex-col gap-2">
+                    <Button className="w-full" onClick={handleConnectEvolution}>
+                      <Check className="h-4 w-4 mr-2" />
+                      {config.connectLabel}
+                    </Button>
+                    <Button variant="outline" className="w-full" onClick={openInstancePicker} type="button">
+                      <Server className="h-4 w-4 mr-2" />
+                      Verificar instâncias
+                    </Button>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -258,6 +611,133 @@ export default function ConnectionsPage() {
         isConnecting={isConnecting}
         onRefreshQr={() => currentInstanceName && refreshEvolutionQr(currentInstanceName)}
       />
+
+      <Modal
+        isOpen={instancePickerOpen}
+        onClose={() => !instancePickerConnecting && setInstancePickerOpen(false)}
+        title="Instâncias Evolution ativas"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Instâncias com o prefixo do seu tenant que estão <strong>conectadas</strong> na Evolution. Escolha uma
+            para vincular ao CRM (sem novo QR).
+          </p>
+
+          {instancePickerLoading && (
+            <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              Consultando Evolution…
+            </div>
+          )}
+
+          {instancePickerError && (
+            <p className="text-sm text-destructive">{instancePickerError}</p>
+          )}
+
+          {!instancePickerLoading && !instancePickerError && instancePickerActive.length === 0 && (
+            <p className="text-sm text-muted-foreground py-4">
+              Nenhuma instância ativa encontrada para este tenant. Use &quot;Conectar com QR&quot; para criar ou
+              reconectar.
+            </p>
+          )}
+
+          {!instancePickerLoading && instancePickerActive.length > 0 && (
+            <ul className="space-y-2 max-h-[min(50vh,360px)] overflow-y-auto pr-1">
+              {instancePickerActive.map((row) => {
+                const id = `ev-inst-${row.instanceName}`
+                const selected = selectedInstanceName === row.instanceName
+                return (
+                  <li key={row.instanceName}>
+                    <label
+                      htmlFor={id}
+                      className={`flex cursor-pointer gap-3 rounded-lg border p-3 transition-colors ${
+                        selected ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40'
+                      }`}
+                    >
+                      <input
+                        id={id}
+                        type="radio"
+                        name="evolution-instance"
+                        className="mt-1"
+                        checked={selected}
+                        onChange={() => setSelectedInstanceName(row.instanceName)}
+                      />
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <p className="text-xs font-medium text-muted-foreground">Instância</p>
+                        <p className="text-sm font-mono break-all">{row.instanceName}</p>
+                        {(row.profileName || row.owner) && (
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1 text-sm">
+                            {row.profileName && (
+                              <span>
+                                <span className="text-muted-foreground">Perfil: </span>
+                                {row.profileName}
+                              </span>
+                            )}
+                            {row.owner && (
+                              <span>
+                                <span className="text-muted-foreground">Número: </span>
+                                {formatWhatsAppPhoneFromJid(row.owner)}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {row.status && (
+                          <p className="text-xs text-muted-foreground">Estado na API: {row.status}</p>
+                        )}
+                      </div>
+                    </label>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+
+          {!instancePickerLoading && instancePickerInactive.length > 0 && (
+            <details className="text-sm">
+              <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                Outras instâncias do tenant (desconectadas na Evolution){' '}
+                <span className="font-medium">({instancePickerInactive.length})</span>
+              </summary>
+              <ul className="mt-2 space-y-1 pl-2 font-mono text-xs text-muted-foreground break-all">
+                {instancePickerInactive.map((row) => (
+                  <li key={row.instanceName}>{row.instanceName}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+
+          <div className="flex flex-wrap gap-2 justify-end border-t pt-4">
+            <Button
+              variant="outline"
+              type="button"
+              disabled={instancePickerConnecting}
+              onClick={() => setInstancePickerOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              disabled={
+                instancePickerLoading ||
+                !selectedInstanceName ||
+                instancePickerActive.length === 0 ||
+                instancePickerConnecting
+              }
+              onClick={confirmConnectSelectedInstance}
+            >
+              {instancePickerConnecting ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Associando…
+                </>
+              ) : (
+                'Usar esta instância no CRM'
+              )}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
     </div>
   )
